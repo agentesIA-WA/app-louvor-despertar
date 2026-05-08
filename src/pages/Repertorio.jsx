@@ -55,7 +55,8 @@ export default function Repertorio() {
       const { data, error } = await supabase.from('repertorio').update(payload).eq('id', editingId).select();
       console.log('Resposta update repertorio', { data, error });
 
-      if (!error) {
+      // Se a atualização não retornou erro mas também não retornou linhas, tratar como falha (p.ex. RLS ou mismatch de id)
+      if (!error && data && data.length > 0) {
         console.log('Update bem-sucedido, rows retornadas:', data);
         setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
         setIsModalOpen(false);
@@ -63,8 +64,10 @@ export default function Repertorio() {
         mostrarNotificacao('sucesso', 'Música atualizada!');
         fetchMusicas();
       } else {
-        console.error('Erro atualizando repertorio:', error);
-        mostrarNotificacao('erro', `Erro ao atualizar música: ${error.message || 'tente novamente'}`);
+        console.error('Falha ao atualizar repertório — nenhuma linha afetada ou erro:', error, data);
+        // Mensagem mais útil ao usuário
+        const detalhe = error?.message || (data && data.length === 0 ? 'nenhuma linha afetada. Verifique permissões (RLS) ou se o registro ainda existe.' : 'tente novamente');
+        mostrarNotificacao('erro', `Erro ao atualizar música: ${detalhe}`);
       }
     } else {
       const payload = [{ 
