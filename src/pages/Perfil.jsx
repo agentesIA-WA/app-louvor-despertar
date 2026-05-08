@@ -21,6 +21,8 @@ export default function Perfil({ session }) {
     is_admin: false
   });
   const [equipe, setEquipe] = useState([]);
+  const [pendingUsuarios, setPendingUsuarios] = useState([]); // Usuários aguardando validação
+  const [aprovandoId, setAprovandoId] = useState(null);
   
   // Estado para controlar qual membro está sendo editado no Modal
   const [membroEditando, setMembroEditando] = useState(null);
@@ -57,6 +59,17 @@ export default function Perfil({ session }) {
             .neq('id', session.user.id)
             .order('nome', { ascending: true });
           setEquipe(listaEquipe || []);
+
+          // Buscar usuários pendentes (sem acessos)
+          const { data: pendentes } = await supabase
+            .from('perfis')
+            .select('id, nome')
+            .eq('is_admin', false)
+            .eq('acesso_escalas', false)
+            .eq('acesso_repertorio', false)
+            .eq('acesso_avisos', false)
+            .order('nome', { ascending: true });
+          setPendingUsuarios(pendentes || []);
         } else {
           const { data: listaEquipe } = await supabase
             .from('perfis')
@@ -64,6 +77,7 @@ export default function Perfil({ session }) {
             .neq('id', session.user.id)
             .order('nome', { ascending: true });
           setEquipe(listaEquipe || []);
+          setPendingUsuarios([]);
         }
       }
     } catch (err) {
@@ -120,6 +134,31 @@ export default function Perfil({ session }) {
       alert('Erro ao salvar permissões: ' + err.message);
     } finally {
       setSalvandoPermissoes(false);
+    }
+  }
+
+  // Aprovar usuário pendente
+  async function aprovarUsuario(usuarioId) {
+    try {
+      setAprovandoId(usuarioId);
+      const { error } = await supabase.from('perfis').update({
+        acesso_escalas: true,
+        acesso_repertorio: true,
+        acesso_avisos: true
+      }).eq('id', usuarioId);
+      if (error) throw error;
+
+      // atualizar listas locais
+      setPendingUsuarios(pendingUsuarios.filter(u => u.id !== usuarioId));
+      const { data: novoUsuario } = await supabase.from('perfis').select('id, nome, is_admin, acesso_escalas, acesso_repertorio, acesso_avisos').eq('id', usuarioId).maybeSingle();
+      if (novoUsuario) setEquipe(prev => [novoUsuario, ...prev]);
+
+      mostrarNotificacao('sucesso', 'Usuário aprovado com sucesso!');
+    } catch (err) {
+      console.error('Erro aprovando usuário:', err);
+      mostrarNotificacao('erro', 'Erro ao aprovar usuário: ' + (err.message || 'tente novamente'));
+    } finally {
+      setAprovandoId(null);
     }
   }
 
@@ -243,6 +282,26 @@ export default function Perfil({ session }) {
           </div>
 
           <div className="relative z-10">
+            {perfil.is_admin && pendingUsuarios.length > 0 && (
+              <div className="bg-white p-6 rounded-2xl mb-6">
+                <h4 className="text-sm font-bold text-slate-700 mb-3">Usuários aguardando validação</h4>
+                <div className="space-y-2">
+                  {pendingUsuarios.map(u => (
+                    <div key={u.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg">
+                      <div>
+                        <p className="font-bold text-sm">{u.nome || 'Sem nome informado'}</p>
+                        <p className="text-[11px] text-slate-500">ID: {u.id}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => aprovarUsuario(u.id)} disabled={aprovandoId===u.id} className="bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold text-sm">
+                          {aprovandoId===u.id ? 'Aprovando...' : 'Aprovar'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {perfil.is_admin ? (
               <div className="grid md:grid-cols-2 gap-4">
                 {equipe.length === 0 ? (
