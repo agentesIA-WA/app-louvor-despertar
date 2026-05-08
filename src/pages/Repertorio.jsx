@@ -18,6 +18,7 @@ export default function Repertorio() {
   const [titulo, setTitulo] = useState('');
   const [artista, setArtista] = useState('');
   const [tom, setTom] = useState('');
+  const [bpm, setBpm] = useState(''); // BPM da música
   const [linkYoutube, setLinkYoutube] = useState('');
   const [linkCifra, setLinkCifra] = useState('');
 
@@ -41,7 +42,7 @@ export default function Repertorio() {
   async function handleAddMusica(e) {
     e.preventDefault();
     const { error } = await supabase.from('repertorio').insert([{ 
-      titulo, artista, tom, link_youtube: linkYoutube, link_cifra: linkCifra 
+      titulo, artista, tom, bpm: bpm ? parseInt(bpm) : null, link_youtube: linkYoutube, link_cifra: linkCifra 
     }]);
 
     if (!error) {
@@ -119,6 +120,7 @@ export default function Repertorio() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {musica.tom && <span className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl mr-2">{musica.tom}</span>}
+                {musica.bpm != null && <span className="bg-emerald-50 text-emerald-500 text-xs font-bold px-3 py-1.5 rounded-xl mr-2">{musica.bpm} BPM</span>}
                 {musica.link_cifra && <a href={musica.link_cifra} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-orange-500 transition p-1"><FileText size={20} /></a>}
                 {musica.link_youtube && <a href={musica.link_youtube} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-red-500 transition p-1"><PlaySquare size={20} /></a>}
                 
@@ -150,7 +152,7 @@ export default function Repertorio() {
                   <input type="text" required value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ex: Lindo És"/>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Artista</label>
                     <input type="text" value={artista} onChange={(e) => setArtista(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ex: Livres"/>
@@ -158,6 +160,10 @@ export default function Repertorio() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Tom Principal</label>
                     <input type="text" value={tom} onChange={(e) => setTom(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none uppercase" placeholder="Ex: G, Am" maxLength={5}/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">BPM</label>
+                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ex: 120" min={1}/>
                   </div>
                 </div>
 
