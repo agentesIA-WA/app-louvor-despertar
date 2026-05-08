@@ -51,9 +51,12 @@ export default function Repertorio() {
         link_youtube: linkYoutube,
         link_cifra: linkCifra,
       };
+      console.log('Atualizando repertório', { editingId, payload });
       const { data, error } = await supabase.from('repertorio').update(payload).eq('id', editingId).select();
+      console.log('Resposta update repertorio', { data, error });
 
       if (!error) {
+        console.log('Update bem-sucedido, rows retornadas:', data);
         setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
         setIsModalOpen(false);
         setEditingId(null);
