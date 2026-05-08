@@ -22,41 +22,60 @@ export default function Login() {
       if (error) setErro('Credenciais inválidas. Tente novamente.');
     } else {
       // Criando nova conta
-      const { data, error } = await supabase.auth.signUp({ email, password: senha });
-      if (error) {
+      // Validação cliente para evitar mensagens genéricas
+      if (!senha || senha.length < 6) {
         setErro('Erro ao criar conta. A senha deve ter no mínimo 6 caracteres.');
-      } else {
-        // Insere perfil inicial na tabela 'perfis' para que o administrador conceda permissões
-        try {
-          const user = data?.user;
-          if (user) {
-            const { error: perfilError } = await supabase.from('perfis').insert([{ 
-              id: user.id,
-              nome: '',
-              is_admin: false,
-              acesso_escalas: false,
-              acesso_repertorio: false,
-              acesso_avisos: false
-            }]);
-            if (perfilError) console.error('Erro criando perfil inicial:', perfilError);
+        setLoading(false);
+        return;
+      }
 
-            // Cria um aviso administrativo para notificar administradores sobre novo cadastro
-            try {
-              const adminTitle = `ADMIN: Novo usuário cadastrado - ${email}`;
-              const adminMessage = `Um novo usuário se registrou com o e-mail ${email} (id: ${user.id}). Conceda acessos no painel de Perfis.`;
-              const { error: avisoError } = await supabase.from('avisos').insert([{ titulo: adminTitle, mensagem: adminMessage, autor_id: user.id }]);
-              if (avisoError) console.error('Erro criando aviso admin:', avisoError);
-            } catch (errAviso) {
-              console.error('Erro ao criar aviso de admin:', errAviso);
-            }
+      try {
+        const { data, error } = await supabase.auth.signUp({ email, password: senha });
+        console.log('signUp response', { data, error });
+
+        if (error) {
+          // Tratamento específico para 429 (rate limit)
+          if (error.status === 429) {
+            setErro('Muitas requisições. Tente novamente em alguns minutos.');
+          } else {
+            setErro(error.message || 'Erro ao criar conta. Tente novamente.');
           }
-        } catch (err) {
-          console.error('Erro ao criar perfil inicial:', err);
-        }
+        } else {
+          // Insere perfil inicial na tabela 'perfis' para que o administrador conceda permissões
+          try {
+            const user = data?.user;
+            if (user) {
+              const { error: perfilError } = await supabase.from('perfis').insert([{ 
+                id: user.id,
+                nome: '',
+                is_admin: false,
+                acesso_escalas: false,
+                acesso_repertorio: false,
+                acesso_avisos: false
+              }]);
+              if (perfilError) console.error('Erro criando perfil inicial:', perfilError);
 
-        setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
-        setIsLogin(true);
-        setSenha('');
+              // Cria um aviso administrativo para notificar administradores sobre novo cadastro
+              try {
+                const adminTitle = `ADMIN: Novo usuário cadastrado - ${email}`;
+                const adminMessage = `Um novo usuário se registrou com o e-mail ${email} (id: ${user.id}). Conceda acessos no painel de Perfis.`;
+                const { error: avisoError } = await supabase.from('avisos').insert([{ titulo: adminTitle, mensagem: adminMessage, autor_id: user.id }]);
+                if (avisoError) console.error('Erro criando aviso admin:', avisoError);
+              } catch (errAviso) {
+                console.error('Erro ao criar aviso de admin:', errAviso);
+              }
+            }
+          } catch (err) {
+            console.error('Erro ao criar perfil inicial:', err);
+          }
+
+          setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
+          setIsLogin(true);
+          setSenha('');
+        }
+      } catch (err) {
+        console.error('Erro no signUp:', err);
+        setErro('Erro ao criar conta. Tente novamente mais tarde.');
       }
     }
     
