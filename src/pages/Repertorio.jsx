@@ -43,9 +43,15 @@ export default function Repertorio() {
   async function handleSaveMusica(e) {
     e.preventDefault();
     if (editingId) {
-      const { error } = await supabase.from('repertorio').update({
-        titulo, artista, tom, bpm: bpm ? parseInt(bpm) : null, link_youtube: linkYoutube, link_cifra: linkCifra
-      }).eq('id', editingId);
+      const payload = {
+        titulo,
+        artista,
+        tom,
+        bpm: bpm ? parseInt(bpm) : null,
+        link_youtube: linkYoutube,
+        link_cifra: linkCifra,
+      };
+      const { data, error } = await supabase.from('repertorio').update(payload).eq('id', editingId).select();
 
       if (!error) {
         setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
@@ -54,12 +60,14 @@ export default function Repertorio() {
         mostrarNotificacao('sucesso', 'Música atualizada!');
         fetchMusicas();
       } else {
-        mostrarNotificacao('erro', 'Erro ao atualizar música. Tente novamente.');
+        console.error('Erro atualizando repertorio:', error);
+        mostrarNotificacao('erro', `Erro ao atualizar música: ${error.message || 'tente novamente'}`);
       }
     } else {
-      const { error } = await supabase.from('repertorio').insert([{ 
+      const payload = [{ 
         titulo, artista, tom, bpm: bpm ? parseInt(bpm) : null, link_youtube: linkYoutube, link_cifra: linkCifra 
-      }]);
+      }];
+      const { data, error } = await supabase.from('repertorio').insert(payload).select();
 
       if (!error) {
         setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
@@ -67,7 +75,8 @@ export default function Repertorio() {
         mostrarNotificacao('sucesso', 'Música adicionada ao repertório!');
         fetchMusicas(); 
       } else {
-        mostrarNotificacao('erro', 'Erro ao salvar música. Tente novamente.');
+        console.error('Erro inserindo repertorio:', error);
+        mostrarNotificacao('erro', `Erro ao salvar música: ${error.message || 'tente novamente'}`);
       }
     }
   }
