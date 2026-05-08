@@ -134,6 +134,17 @@ export default function Perfil({ session }) {
           <ShieldCheck size={14} className={perfil.is_admin ? "text-amber-500" : "text-indigo-500"} />
           {perfil.is_admin ? 'Acesso Administrativo' : 'Perfil de Integrante'}
         </p>
+
+        {/* Banner informativo para não-admins */}
+        {!perfil.is_admin && (
+          <div className="mt-6 bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-2xl flex items-start gap-3">
+            <ShieldCheck size={20} className="mt-1 text-amber-600" />
+            <div>
+              <p className="font-bold">Atenção</p>
+              <p className="text-sm">Somente usuários administradores podem editar perfis e gerenciar permissões. Aqui você pode visualizar a equipe cadastrada.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-10">
