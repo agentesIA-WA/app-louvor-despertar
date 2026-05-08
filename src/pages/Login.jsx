@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Music } from 'lucide-react';
 
@@ -9,9 +9,21 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
   const [mensagem, setMensagem] = useState(null);
+  const submittingRef = useRef(false);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
 
   const handleAuth = async (e) => {
     e.preventDefault();
+
+    // Cooldown/lock checks
+    if (Date.now() < cooldownUntil) {
+      const secs = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      setErro(`Muitas requisições. Tente novamente em ${secs} segundos.`);
+      return;
+    }
+    if (submittingRef.current) return; // já enviando
+
+    submittingRef.current = true;
     setLoading(true);
     setErro(null);
     setMensagem(null);
@@ -36,7 +48,9 @@ export default function Login() {
         if (error) {
           // Tratamento específico para 429 (rate limit)
           if (error.status === 429) {
-            setErro('Muitas requisições. Tente novamente em alguns minutos.');
+            const cooldownMs = 60 * 1000; // 60s
+            setCooldownUntil(Date.now() + cooldownMs);
+            setErro('Muitas requisições. Tente novamente em alguns segundos.');
           } else {
             setErro(error.message || 'Erro ao criar conta. Tente novamente.');
           }
@@ -79,6 +93,8 @@ export default function Login() {
       }
     }
     
+    // liberar lock
+    submittingRef.current = false;
     setLoading(false);
   };
 
