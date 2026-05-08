@@ -22,11 +22,29 @@ export default function Login() {
       if (error) setErro('Credenciais inválidas. Tente novamente.');
     } else {
       // Criando nova conta
-      const { error } = await supabase.auth.signUp({ email, password: senha });
+      const { data, error } = await supabase.auth.signUp({ email, password: senha });
       if (error) {
         setErro('Erro ao criar conta. A senha deve ter no mínimo 6 caracteres.');
       } else {
-        setMensagem('Conta criada com sucesso! Faça login para continuar.');
+        // Insere perfil inicial na tabela 'perfis' para que o administrador conceda permissões
+        try {
+          const user = data?.user;
+          if (user) {
+            const { error: perfilError } = await supabase.from('perfis').insert([{ 
+              id: user.id,
+              nome: '',
+              is_admin: false,
+              acesso_escalas: false,
+              acesso_repertorio: false,
+              acesso_avisos: false
+            }]);
+            if (perfilError) console.error('Erro criando perfil inicial:', perfilError);
+          }
+        } catch (err) {
+          console.error('Erro ao criar perfil inicial:', err);
+        }
+
+        setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
         setIsLogin(true);
         setSenha('');
       }
