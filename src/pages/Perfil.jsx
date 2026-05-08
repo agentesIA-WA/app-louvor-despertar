@@ -49,14 +49,20 @@ export default function Perfil({ session }) {
           is_admin: usuarioLogado.is_admin || false
         });
 
+        // Buscar lista de equipe para todos — admins recebem campos adicionais para edição
         if (usuarioLogado.is_admin) {
-          // Buscando os novos campos de acesso no banco
           const { data: listaEquipe } = await supabase
             .from('perfis')
             .select('id, nome, is_admin, acesso_escalas, acesso_repertorio, acesso_avisos')
             .neq('id', session.user.id)
             .order('nome', { ascending: true });
-          
+          setEquipe(listaEquipe || []);
+        } else {
+          const { data: listaEquipe } = await supabase
+            .from('perfis')
+            .select('id, nome, is_admin')
+            .neq('id', session.user.id)
+            .order('nome', { ascending: true });
           setEquipe(listaEquipe || []);
         }
       }
@@ -147,6 +153,7 @@ export default function Perfil({ session }) {
                   <input 
                     type="text"
                     required
+                    disabled={!perfil.is_admin}
                     className="w-full bg-slate-50 border-none rounded-2xl py-5 pl-14 pr-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all"
                     value={perfil.nome}
                     onChange={e => setPerfil({...perfil, nome: e.target.value})}
@@ -174,6 +181,7 @@ export default function Perfil({ session }) {
                     type="number"
                     min="1"
                     max="31"
+                    disabled={!perfil.is_admin}
                     className="w-full bg-slate-50 border-none rounded-2xl py-5 px-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 text-center"
                     value={perfil.aniversario_dia}
                     onChange={e => setPerfil({...perfil, aniversario_dia: e.target.value})}
@@ -185,6 +193,7 @@ export default function Perfil({ session }) {
                     type="number"
                     min="1"
                     max="12"
+                    disabled={!perfil.is_admin}
                     className="w-full bg-slate-50 border-none rounded-2xl py-5 px-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 text-center"
                     value={perfil.aniversario_mes}
                     onChange={e => setPerfil({...perfil, aniversario_mes: e.target.value})}
@@ -193,15 +202,17 @@ export default function Perfil({ session }) {
               </div>
             </div>
 
-            <div className="pt-4">
-              <button 
-                type="submit"
-                disabled={saving}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {saving ? 'Gravando...' : <><Save size={22} /> Salvar Meus Dados</>}
-              </button>
-            </div>
+            {perfil.is_admin && (
+              <div className="pt-4">
+                <button 
+                  type="submit"
+                  disabled={saving}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? 'Gravando...' : <><Save size={22} /> Salvar Meus Dados</>}
+                </button>
+              </div>
+            )}
           </form>
         </div>
 
@@ -249,14 +260,24 @@ export default function Perfil({ session }) {
                 )}
               </div>
             ) : (
-              <div className="bg-white/5 p-10 rounded-[2.5rem] border border-dashed border-white/10 text-center space-y-6 max-w-lg mx-auto">
-                <ShieldCheck size={48} className="mx-auto text-white/10" />
-                <div className="space-y-2">
-                  <p className="text-white font-bold tracking-tight">Acesso Restrito</p>
-                  <p className="text-white/40 text-xs font-medium italic">
-                    A listagem e gestão de permissões é exclusiva para administradores.
-                  </p>
-                </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                {equipe.length === 0 ? (
+                  <p className="text-white/40 italic text-sm py-10">Nenhum membro encontrado.</p>
+                ) : (
+                  equipe.map((m) => (
+                    <div key={m.id} className="bg-white/5 p-5 rounded-2xl border border-white/10 text-left">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black shrink-0 ${m.is_admin ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                          {m.nome.charAt(0)}
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-sm mb-1 truncate">{m.nome}</p>
+                          <p className="text-[10px] text-white/40 uppercase font-black tracking-widest">{m.is_admin ? 'Admin' : 'Membro'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
