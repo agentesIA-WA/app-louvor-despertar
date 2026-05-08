@@ -39,6 +39,16 @@ export default function Login() {
               acesso_avisos: false
             }]);
             if (perfilError) console.error('Erro criando perfil inicial:', perfilError);
+
+            // Cria um aviso administrativo para notificar administradores sobre novo cadastro
+            try {
+              const adminTitle = `ADMIN: Novo usuário cadastrado - ${email}`;
+              const adminMessage = `Um novo usuário se registrou com o e-mail ${email} (id: ${user.id}). Conceda acessos no painel de Perfis.`;
+              const { error: avisoError } = await supabase.from('avisos').insert([{ titulo: adminTitle, mensagem: adminMessage, autor_id: user.id }]);
+              if (avisoError) console.error('Erro criando aviso admin:', avisoError);
+            } catch (errAviso) {
+              console.error('Erro ao criar aviso de admin:', errAviso);
+            }
           }
         } catch (err) {
           console.error('Erro ao criar perfil inicial:', err);

@@ -26,22 +26,28 @@ export default function Avisos({ session }) {
   async function fetchDados() {
     try {
       setLoading(true);
+
+      // Primeiro carrega o perfil do usuário para decidir quais avisos mostrar
+      let perfil = null;
+      if (session?.user) {
+        const { data } = await supabase.from('perfis').select('*').eq('id', session.user.id).maybeSingle();
+        perfil = data;
+        if (perfil) setMeuPerfil(perfil);
+      }
+
       const hoje = new Date().toISOString().split('T')[0];
 
       // Busca avisos que NÃO expiraram OU que não têm data de expiração
-      const { data: avisosData, error: avisosError } = await supabase
-        .from('avisos')
-        .select('*')
-        .or(`data_expiracao.is.null,data_expiracao.gte.${hoje}`)
-        .order('created_at', { ascending: false });
-        
+      // Se não for admin, filtra avisos marcados como ADMIN: para que sejam visíveis apenas a administradores
+      let query = supabase.from('avisos').select('*').or(`data_expiracao.is.null,data_expiracao.gte.${hoje}`);
+      if (!perfil?.is_admin) {
+        query = query.not('titulo', 'like', 'ADMIN:%');
+      }
+      const { data: avisosData, error: avisosError } = await query.order('created_at', { ascending: false });
+
       if (avisosError) throw avisosError;
       if (avisosData) setAvisos(avisosData);
 
-      if (session?.user) {
-        const { data: perfil } = await supabase.from('perfis').select('*').eq('id', session.user.id).maybeSingle();
-        if (perfil) setMeuPerfil(perfil);
-      }
     } catch (error) {
       console.error("Erro ao carregar:", error);
     } finally {
