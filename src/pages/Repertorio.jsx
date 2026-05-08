@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Music, Trash2, X, PlaySquare, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, Music, Trash2, X, PlaySquare, FileText, CheckCircle, AlertCircle, Edit } from 'lucide-react';
 import ModalConfirmacao from '../components/ModalConfirmacao'; // Importe o modal
 
 export default function Repertorio() {
   const [musicas, setMusicas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   
   // Estado para o Modal de Exclusão
   const [modalExclusao, setModalExclusao] = useState({ isOpen: false, id: null });
@@ -39,19 +40,35 @@ export default function Repertorio() {
     setLoading(false);
   }
 
-  async function handleAddMusica(e) {
+  async function handleSaveMusica(e) {
     e.preventDefault();
-    const { error } = await supabase.from('repertorio').insert([{ 
-      titulo, artista, tom, bpm: bpm ? parseInt(bpm) : null, link_youtube: linkYoutube, link_cifra: linkCifra 
-    }]);
+    if (editingId) {
+      const { error } = await supabase.from('repertorio').update({
+        titulo, artista, tom, bpm: bpm ? parseInt(bpm) : null, link_youtube: linkYoutube, link_cifra: linkCifra
+      }).eq('id', editingId);
 
-    if (!error) {
-      setTitulo(''); setArtista(''); setTom(''); setLinkYoutube(''); setLinkCifra('');
-      setIsModalOpen(false);
-      mostrarNotificacao('sucesso', 'Música adicionada ao repertório!');
-      fetchMusicas(); 
+      if (!error) {
+        setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
+        setIsModalOpen(false);
+        setEditingId(null);
+        mostrarNotificacao('sucesso', 'Música atualizada!');
+        fetchMusicas();
+      } else {
+        mostrarNotificacao('erro', 'Erro ao atualizar música. Tente novamente.');
+      }
     } else {
-      mostrarNotificacao('erro', 'Erro ao salvar música. Tente novamente.');
+      const { error } = await supabase.from('repertorio').insert([{ 
+        titulo, artista, tom, bpm: bpm ? parseInt(bpm) : null, link_youtube: linkYoutube, link_cifra: linkCifra 
+      }]);
+
+      if (!error) {
+        setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
+        setIsModalOpen(false);
+        mostrarNotificacao('sucesso', 'Música adicionada ao repertório!');
+        fetchMusicas(); 
+      } else {
+        mostrarNotificacao('erro', 'Erro ao salvar música. Tente novamente.');
+      }
     }
   }
 
@@ -68,6 +85,29 @@ export default function Repertorio() {
       fetchMusicas();
     }
     setModalExclusao({ isOpen: false, id: null }); // Fecha o modal
+  }
+
+  // Abrir modal para adicionar nova música (limpa campos)
+  function openAddModal() {
+    setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra(''); setEditingId(null); setIsModalOpen(true);
+  }
+
+  // Abrir modal para editar música existente
+  function openEditModal(musica) {
+    setTitulo(musica.titulo || '');
+    setArtista(musica.artista || '');
+    setTom(musica.tom || '');
+    setBpm(musica.bpm != null ? String(musica.bpm) : '');
+    setLinkYoutube(musica.link_youtube || '');
+    setLinkCifra(musica.link_cifra || '');
+    setEditingId(musica.id);
+    setIsModalOpen(true);
+  }
+
+  function closeModal() {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
   }
 
   return (
@@ -94,7 +134,7 @@ export default function Repertorio() {
 
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-800">Repertório</h2>
-        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white p-3 rounded-2xl shadow-md hover:bg-blue-700 transition flex items-center gap-2 font-bold text-sm">
+        <button onClick={openAddModal} className="bg-blue-600 text-white p-3 rounded-2xl shadow-md hover:bg-blue-700 transition flex items-center gap-2 font-bold text-sm">
           <Plus size={20} /> <span className="hidden md:inline">Nova Música</span>
         </button>
       </div>
@@ -124,6 +164,9 @@ export default function Repertorio() {
                 {musica.link_cifra && <a href={musica.link_cifra} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-orange-500 transition p-1"><FileText size={20} /></a>}
                 {musica.link_youtube && <a href={musica.link_youtube} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-red-500 transition p-1"><PlaySquare size={20} /></a>}
                 
+                <button onClick={() => openEditModal(musica)} className="text-slate-300 hover:text-slate-500 transition p-1 ml-1">
+                  <Edit size={18} />
+                </button>
                 {/* Aqui substituímos a chamada antiga pela nova função confirmarExclusao */}
                 <button onClick={() => confirmarExclusao(musica.id)} className="text-slate-300 hover:text-red-500 transition p-1 ml-1">
                   <Trash2 size={18} />
@@ -140,13 +183,13 @@ export default function Repertorio() {
           {/* ... resto do seu formulário modal de cadastro ... */}
             <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-slate-800">Adicionar Música</h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-700 bg-slate-100 p-2 rounded-full">
+                <h3 className="text-xl font-bold text-slate-800">{editingId ? 'Editar Música' : 'Adicionar Música'}</h3>
+                <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 bg-slate-100 p-2 rounded-full">
                   <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddMusica} className="space-y-4">
+              <form onSubmit={handleSaveMusica} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Título da Música *</label>
                   <input type="text" required value={titulo} onChange={(e) => setTitulo(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Ex: Lindo És"/>
