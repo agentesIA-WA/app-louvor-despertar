@@ -1,276 +1,345 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { User, LogOut, Save, Users, Cake, Check, CheckCircle, AlertCircle, ShieldCheck, UserCircle, Phone, Mail, ChevronRight } from 'lucide-react';
-
-const OPCOES_FUNCAO = [
-  "Vocal", "Violão", "Guitarra", "Baixo", "Bateria", 
-  "Teclado", "Líder", "Sonoplastia", "Projeção", "Backing Vocal"
-];
-
-const MESES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-];
+import { 
+  User, 
+  Mail, 
+  ShieldCheck, 
+  Save, 
+  Users, 
+  CheckCircle2,
+  Settings2,
+  X
+} from 'lucide-react';
 
 export default function Perfil({ session }) {
-  // Estados do Formulário
-  const [membroId, setMembroId] = useState('');
-  const [nome, setNome] = useState('');
-  const [funcoesSelecionadas, setFuncoesSelecionadas] = useState([]);
-  const [diaAniversario, setDiaAniversario] = useState('');
-  const [mesAniversario, setMesAniversario] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
-  const [emailContato, setEmailContato] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // Estados de Controle
-  const [meuPerfil, setMeuPerfil] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [perfil, setPerfil] = useState({
+    nome: '',
+    aniversario_dia: '',
+    aniversario_mes: '',
+    is_admin: false
+  });
   const [equipe, setEquipe] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [notificacao, setNotificacao] = useState(null);
-
-  function mostrarNotificacao(tipo, texto) {
-    setNotificacao({ tipo, texto });
-    setTimeout(() => setNotificacao(null), 3000);
-  }
+  
+  // Estado para controlar qual membro está sendo editado no Modal
+  const [membroEditando, setMembroEditando] = useState(null);
+  const [salvandoPermissoes, setSalvandoPermissoes] = useState(false);
 
   useEffect(() => {
-    fetchDadosIniciais();
+    if (session?.user) {
+      fetchDados();
+    }
   }, [session]);
 
-  async function fetchDadosIniciais() {
-    setLoading(true);
-    // 1. Busca o perfil de quem está logado
-    const { data: perfilLogado } = await supabase.from('perfis').select('*').eq('id', session.user.id).single();
-    if (perfilLogado) {
-      setMeuPerfil(perfilLogado);
-      carregarNoFormulario(perfilLogado); // Inicia com os dados do próprio usuário
-    }
-    
-    // 2. Busca toda a equipe
-    const { data: membros } = await supabase.from('perfis').select('*').order('nome');
-    if (membros) setEquipe(membros);
-    setLoading(false);
-  }
+  async function fetchDados() {
+    try {
+      setLoading(true);
+      const { data: usuarioLogado } = await supabase
+        .from('perfis')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
 
-  // Função para carregar qualquer membro no formulário de edição
-  function carregarNoFormulario(membro) {
-    setMembroId(membro.id);
-    setNome(membro.nome || '');
-    setWhatsapp(membro.whatsapp || '');
-    setEmailContato(membro.email_contato || '');
-    setDiaAniversario(membro.aniversario_dia || '');
-    setMesAniversario(membro.aniversario_mes || '');
-    setIsAdmin(membro.is_admin || false);
-    setFuncoesSelecionadas(membro.funcao ? membro.funcao.split(', ') : []);
-    
-    // Rola a tela para o topo para facilitar a edição
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+      if (usuarioLogado) {
+        setPerfil({
+          nome: usuarioLogado.nome || '',
+          aniversario_dia: usuarioLogado.aniversario_dia || '',
+          aniversario_mes: usuarioLogado.aniversario_mes || '',
+          is_admin: usuarioLogado.is_admin || false
+        });
 
-  const toggleFuncao = (funcao) => {
-    setFuncoesSelecionadas(prev => 
-      prev.includes(funcao) ? prev.filter(f => f !== funcao) : [...prev, funcao]
-    );
-  };
-
-  async function handleSalvar(e) {
-    e.preventDefault();
-    setLoading(true);
-    
-    const { error } = await supabase.from('perfis').upsert({
-      id: membroId,
-      nome,
-      whatsapp,
-      email_contato: emailContato,
-      funcao: funcoesSelecionadas.join(', '), 
-      aniversario_dia: parseInt(diaAniversario) || null,
-      aniversario_mes: parseInt(mesAniversario) || null,
-      is_admin: isAdmin
-    });
-
-    if (!error) {
-      mostrarNotificacao('sucesso', 'Dados salvos com sucesso!');
-      // Se eu alterei meu próprio perfil, atualizo o estado local do admin
-      if (membroId === session.user.id) {
-        setMeuPerfil(prev => ({ ...prev, is_admin: isAdmin }));
+        if (usuarioLogado.is_admin) {
+          // Buscando os novos campos de acesso no banco
+          const { data: listaEquipe } = await supabase
+            .from('perfis')
+            .select('id, nome, is_admin, acesso_escalas, acesso_repertorio, acesso_avisos')
+            .neq('id', session.user.id)
+            .order('nome', { ascending: true });
+          
+          setEquipe(listaEquipe || []);
+        }
       }
-      // Atualiza a lista da equipe para refletir as mudanças
-      const { data: membros } = await supabase.from('perfis').select('*').order('nome');
-      if (membros) setEquipe(membros);
-    } else {
-      mostrarNotificacao('erro', 'Erro ao salvar alterações.');
+    } catch (err) {
+      console.error("Erro ao sincronizar perfil:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  }
+
+  // Salva os dados do PRÓPRIO usuário
+  async function handleUpdate(e) {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      const { error } = await supabase
+        .from('perfis')
+        .update({
+          nome: perfil.nome,
+          aniversario_dia: parseInt(perfil.aniversario_dia),
+          aniversario_mes: parseInt(perfil.aniversario_mes)
+        })
+        .eq('id', session.user.id);
+
+      if (error) throw error;
+      alert("Seus dados foram atualizados com sucesso!");
+    } catch (err) {
+      alert("Erro ao salvar: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Salva as permissões do MEMBRO DA EQUIPE (Ação de Admin)
+  async function salvarPermissoesMembro() {
+    try {
+      setSalvandoPermissoes(true);
+      const { error } = await supabase
+        .from('perfis')
+        .update({
+          is_admin: membroEditando.is_admin,
+          acesso_escalas: membroEditando.acesso_escalas,
+          acesso_repertorio: membroEditando.acesso_repertorio,
+          acesso_avisos: membroEditando.acesso_avisos
+        })
+        .eq('id', membroEditando.id);
+        
+      if (error) throw error;
+      
+      // Atualiza a lista local para não precisar fazer um novo fetch no banco
+      setEquipe(equipe.map(m => m.id === membroEditando.id ? membroEditando : m));
+      setMembroEditando(null); // Fecha o modal
+      alert('Permissões atualizadas com sucesso!');
+    } catch (err) {
+      alert('Erro ao salvar permissões: ' + err.message);
+    } finally {
+      setSalvandoPermissoes(false);
+    }
   }
 
   return (
-    <div className="space-y-8 animate-fade-in pb-10 relative">
+    <div className="max-w-4xl mx-auto space-y-10 p-4 animate-fade-in pb-20">
       
-      {notificacao && (
-        <div className="fixed top-5 right-5 z-[70] animate-fade-in">
-          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-white font-bold ${notificacao.tipo === 'sucesso' ? 'bg-green-500' : 'bg-red-500'}`}>
-            {notificacao.tipo === 'sucesso' ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
-            {notificacao.texto}
+      <div className="px-2">
+        <h2 className="text-5xl font-black text-slate-800 tracking-tighter italic">
+          Configurações
+        </h2>
+        <p className="text-slate-500 font-bold mt-2 uppercase text-[10px] tracking-[0.3em] flex items-center gap-2">
+          <ShieldCheck size={14} className={perfil.is_admin ? "text-amber-500" : "text-indigo-500"} />
+          {perfil.is_admin ? 'Acesso Administrativo' : 'Perfil de Integrante'}
+        </p>
+      </div>
+
+      <div className="space-y-10">
+        
+        {/* BLOCO SUPERIOR: MEU PERFIL */}
+        <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-10 flex items-center gap-2 font-sans">
+            <User size={18} className="text-indigo-500" /> Minhas Informações
+          </h3>
+
+          <form onSubmit={handleUpdate} className="space-y-8">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Nome Completo</label>
+                <div className="relative">
+                  <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                  <input 
+                    type="text"
+                    required
+                    className="w-full bg-slate-50 border-none rounded-2xl py-5 pl-14 pr-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all"
+                    value={perfil.nome}
+                    onChange={e => setPerfil({...perfil, nome: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 opacity-60">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">E-mail</label>
+                <div className="relative">
+                  <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                  <input 
+                    type="email"
+                    disabled
+                    className="w-full bg-slate-100 border-none rounded-2xl py-5 pl-14 pr-6 font-bold text-slate-400 cursor-not-allowed"
+                    value={session?.user?.email}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Dia Nasc.</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    max="31"
+                    className="w-full bg-slate-50 border-none rounded-2xl py-5 px-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 text-center"
+                    value={perfil.aniversario_dia}
+                    onChange={e => setPerfil({...perfil, aniversario_dia: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Mês Nasc.</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    max="12"
+                    className="w-full bg-slate-50 border-none rounded-2xl py-5 px-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 text-center"
+                    value={perfil.aniversario_mes}
+                    onChange={e => setPerfil({...perfil, aniversario_mes: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button 
+                type="submit"
+                disabled={saving}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-6 rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {saving ? 'Gravando...' : <><Save size={22} /> Salvar Meus Dados</>}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* BLOCO INFERIOR: CONTROLE DE EQUIPE (SÓ ADMIN) */}
+        <div className="bg-slate-900 p-10 rounded-[3rem] text-white space-y-10 relative overflow-hidden">
+          <div className="absolute right-[-10%] top-[-20%] opacity-5">
+            <Users size={350} />
+          </div>
+
+          <div className="relative z-10 space-y-2">
+            <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2 font-sans">
+              <Users size={18} /> Gestão e Permissões
+            </h3>
+            <p className="text-3xl font-black leading-tight tracking-tighter">
+              Equipe Cadastrada
+            </p>
+          </div>
+
+          <div className="relative z-10">
+            {perfil.is_admin ? (
+              <div className="grid md:grid-cols-2 gap-4">
+                {equipe.length === 0 ? (
+                  <p className="text-white/40 italic text-sm py-10">Nenhum outro membro encontrado.</p>
+                ) : (
+                  equipe.map((membro) => (
+                    <button 
+                      key={membro.id}
+                      onClick={() => setMembroEditando(membro)}
+                      className="bg-white/5 p-5 rounded-2xl border border-white/10 flex items-center justify-between group hover:bg-white/10 transition-colors w-full text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black shrink-0 ${membro.is_admin ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                          {membro.nome.charAt(0)}
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-sm mb-1 truncate">{membro.nome}</p>
+                          <p className="text-[10px] text-white/40 uppercase font-black tracking-widest">
+                            {membro.is_admin ? 'Admin' : 'Membro'}
+                          </p>
+                        </div>
+                      </div>
+                      <Settings2 size={20} className="text-white/20 group-hover:text-amber-400 transition-colors shrink-0" />
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="bg-white/5 p-10 rounded-[2.5rem] border border-dashed border-white/10 text-center space-y-6 max-w-lg mx-auto">
+                <ShieldCheck size={48} className="mx-auto text-white/10" />
+                <div className="space-y-2">
+                  <p className="text-white font-bold tracking-tight">Acesso Restrito</p>
+                  <p className="text-white/40 text-xs font-medium italic">
+                    A listagem e gestão de permissões é exclusiva para administradores.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* MODAL DE EDIÇÃO DE PERMISSÕES (Fica por cima de tudo quando ativo) */}
+      {membroEditando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl relative">
+            
+            <button 
+              onClick={() => setMembroEditando(null)}
+              className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 bg-slate-50 p-2 rounded-xl transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="mb-8">
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none mb-2">
+                Acessos do Usuário
+              </h3>
+              <p className="text-indigo-600 font-bold text-sm">{membroEditando.nome}</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Toggle Admin */}
+              <label className="flex items-center justify-between p-4 bg-amber-50 rounded-2xl cursor-pointer hover:bg-amber-100 transition-colors border border-amber-100">
+                <span className="font-black text-amber-700 text-sm">Privilégio de Administrador</span>
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-amber-600"
+                  checked={membroEditando.is_admin}
+                  onChange={e => setMembroEditando({...membroEditando, is_admin: e.target.checked})}
+                />
+              </label>
+
+              <hr className="border-slate-100 my-4" />
+
+              {/* Toggle Módulos */}
+              <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors">
+                <span className="font-bold text-slate-700 text-sm">Acesso a Escalas</span>
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-indigo-600"
+                  checked={membroEditando.acesso_escalas ?? true} // Fallback caso o banco traga null
+                  onChange={e => setMembroEditando({...membroEditando, acesso_escalas: e.target.checked})}
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors">
+                <span className="font-bold text-slate-700 text-sm">Acesso a Repertório</span>
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-indigo-600"
+                  checked={membroEditando.acesso_repertorio ?? true}
+                  onChange={e => setMembroEditando({...membroEditando, acesso_repertorio: e.target.checked})}
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors">
+                <span className="font-bold text-slate-700 text-sm">Acesso a Avisos</span>
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-indigo-600"
+                  checked={membroEditando.acesso_avisos ?? true}
+                  onChange={e => setMembroEditando({...membroEditando, acesso_avisos: e.target.checked})}
+                />
+              </label>
+            </div>
+
+            <button 
+              onClick={salvarPermissoesMembro}
+              disabled={salvandoPermissoes}
+              className="w-full mt-8 bg-slate-900 hover:bg-slate-800 text-white font-black py-5 rounded-2xl shadow-xl shadow-slate-200 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {salvandoPermissoes ? 'Salvando...' : 'Confirmar Permissões'}
+            </button>
           </div>
         </div>
       )}
 
-      <section className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="bg-blue-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-100">
-              <User size={32} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-800">
-                {membroId === session.user.id ? 'Meu Perfil' : `Editando: ${nome}`}
-              </h2>
-              <p className="text-sm text-slate-500">
-                {membroId === session.user.id ? session.user.email : 'Cadastro de Integrante'}
-              </p>
-            </div>
-          </div>
-          {membroId !== session.user.id && (
-            <button 
-              onClick={() => carregarNoFormulario(meuPerfil)}
-              className="text-xs font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition"
-            >
-              Voltar para meu Perfil
-            </button>
-          )}
-        </div>
-
-        <form onSubmit={handleSalvar} className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Coluna 1: Dados Pessoais */}
-            <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Nome Completo</label>
-                <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-600 outline-none transition" />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">WhatsApp</label>
-                  <div className="relative">
-                    <Phone size={18} className="absolute left-4 top-4 text-slate-400" />
-                    <input type="text" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white outline-none" placeholder="(00) 00000-0000" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">E-mail de Contato</label>
-                  <div className="relative">
-                    <Mail size={18} className="absolute left-4 top-4 text-slate-400" />
-                    <input type="email" value={emailContato} onChange={(e) => setEmailContato(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white outline-none" placeholder="email@teste.com" />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100">
-                <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                  <Cake size={18} className="text-pink-500" /> Data de Aniversário
-                </label>
-                <div className="flex gap-3">
-                  <input type="number" min="1" max="31" placeholder="Dia" value={diaAniversario} onChange={(e) => setDiaAniversario(e.target.value)} className="w-24 p-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-600 outline-none transition" />
-                  <select value={mesAniversario} onChange={(e) => setMesAniversario(e.target.value)} className="flex-1 p-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-600 outline-none transition">
-                    <option value="">Selecione o Mês</option>
-                    {MESES.map((mes, index) => (
-                      <option key={mes} value={index + 1}>{mes}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Controle de Admin: Só aparece se você for admin OU estiver editando seu próprio perfil (para se tornar admin no primeiro acesso) */}
-              {(meuPerfil?.is_admin || membroId === session.user.id) && (
-                <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100">
-                  <label className="block text-sm font-bold text-blue-800 mb-4">Nível de Acesso no App</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setIsAdmin(false)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${!isAdmin ? 'border-blue-600 bg-white text-blue-700 font-bold' : 'border-transparent bg-transparent text-slate-400'}`}>
-                      <UserCircle size={24} />
-                      <span className="text-xs">Membro</span>
-                    </button>
-                    <button type="button" onClick={() => setIsAdmin(true)} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${isAdmin ? 'border-blue-600 bg-white text-blue-700 font-bold' : 'border-transparent bg-transparent text-slate-400'}`}>
-                      <ShieldCheck size={24} />
-                      <span className="text-xs">Admin</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Coluna 2: Funções */}
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-4">Funções no Ministério</label>
-              <div className="grid grid-cols-2 gap-2">
-                {OPCOES_FUNCAO.map(funcao => {
-                  const selecionada = funcoesSelecionadas.includes(funcao);
-                  return (
-                    <button key={funcao} type="button" onClick={() => toggleFuncao(funcao)} className={`flex items-center justify-between px-4 py-3 rounded-2xl border text-sm transition-all ${selecionada ? 'bg-blue-600 border-blue-600 text-white font-bold' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'}`}>
-                      {funcao}
-                      {selecionada && <Check size={16} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-3 pt-6 border-t border-slate-100">
-            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition flex justify-center items-center gap-2 shadow-lg shadow-blue-100">
-              <Save size={20} /> {loading ? 'Salvando...' : 'Salvar Alterações'}
-            </button>
-            <button type="button" onClick={() => supabase.auth.signOut()} className="bg-slate-100 text-red-600 font-bold py-4 px-8 rounded-2xl hover:bg-red-50 transition flex items-center justify-center gap-2">
-              <LogOut size={20} /> Sair
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* Lista da Equipe Interativa */}
-      <section>
-        <div className="flex items-center justify-between mb-4 px-2">
-          <div className="flex items-center gap-2">
-            <Users size={24} className="text-slate-800" />
-            <h3 className="text-xl font-bold text-slate-800">Equipe do Ministério</h3>
-          </div>
-          <span className="text-xs font-bold text-slate-400 bg-white px-4 py-2 rounded-full border border-slate-50 uppercase tracking-tighter">
-            {meuPerfil?.is_admin ? 'Clique para editar' : `${equipe.length} membros`}
-          </span>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {equipe.map(membro => (
-            <div 
-              key={membro.id} 
-              onClick={() => meuPerfil?.is_admin && carregarNoFormulario(membro)}
-              className={`bg-white p-5 rounded-[2rem] border transition-all relative ${
-                membroId === membro.id ? 'border-blue-500 ring-2 ring-blue-50' : 'border-slate-100'
-              } ${meuPerfil?.is_admin ? 'cursor-pointer hover:shadow-md hover:border-blue-200' : ''}`}
-            >
-              {membro.is_admin && (
-                <div className="absolute top-4 right-4 text-blue-600">
-                  <ShieldCheck size={16} />
-                </div>
-              )}
-              
-              <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-white text-xl ${membro.is_admin ? 'bg-slate-800' : 'bg-blue-500'}`}>
-                  {membro.nome ? membro.nome.charAt(0).toUpperCase() : '?'}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <h4 className="font-bold text-slate-800 truncate">{membro.nome || 'Membro'}</h4>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
-                    {membro.funcao || 'Sem função'}
-                  </p>
-                </div>
-                {meuPerfil?.is_admin && <ChevronRight size={16} className="text-slate-300" />}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

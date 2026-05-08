@@ -1,28 +1,25 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
+
 import Layout from './components/Layout';
+import Login from "./pages/Login";
 import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
+import Perfil from './pages/Perfil';
+import Escalas from './pages/Escalas'; 
 import Repertorio from './pages/Repertorio';
 import Avisos from './pages/Avisos';
-import Perfil from './pages/Perfil';
-import Membros from './pages/Membros';
-import Escalas from './pages/Escalas';
-import Inicio from './pages/Inicio';
 
-function App() {
+export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Busca a sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
-    // Fica escutando mudanças (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
@@ -30,32 +27,35 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 italic font-black text-indigo-600 animate-pulse">
+        CARREGANDO...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login />;
+  }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Se não tem sessão, vai pro Login. Se tem, vai pro Layout principal */}
-        {!session ? (
-          <Route path="*" element={<Login />} />
-        ) : (
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard session={session} />} />
-            <Route path="escalas" element={<Escalas session={session} />} />
-            <Route path="/" element={<Inicio session={session} />} />
-            <Route path="avisos" element={<Avisos session={session} />} />
-            <Route path="perfil" element={<Perfil session={session} />} />
-            <Route path="equipe" element={<Membros session={session} />} />
-            <Route path="repertorio" element={<Repertorio />} />
-            <Route path="avisos" element={<div className="p-4">Tela de Avisos</div>} />
-            <Route path="perfil" element={
-              <button onClick={() => supabase.auth.signOut()} className="p-4 text-red-600 font-bold">Sair do App</button>
-            } />
-          </Route>
-        )}
-      </Routes>
-    </BrowserRouter>
+    <Router>
+      {/* PASSAMOS A SESSION PARA O LAYOUT PARA ELE CHECAR O ADMIN */}
+      <Layout session={session}>
+        <Routes>
+          <Route path="/" element={<Dashboard session={session} />} />
+          <Route path="/escalas" element={<Escalas session={session} />} />
+          <Route path="/repertorio" element={<Repertorio session={session} />} />
+          <Route path="/avisos" element={<Avisos session={session} />} />
+          
+          {/* O PERFIL SÓ CARREGA SE O USUÁRIO FOR ADMIN NO FUTURO, 
+              POR ENQUANTO O LAYOUT JÁ ESCONDE O BOTÃO */}
+          <Route path="/perfil" element={<Perfil session={session} />} />
+          
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </Router>
   );
 }
-
-export default App;
