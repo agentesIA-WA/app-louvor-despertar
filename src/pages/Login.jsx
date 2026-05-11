@@ -95,7 +95,33 @@ export default function Login() {
               const perfilError = perfilRes.error;
               if (perfilError) {
                 console.error('Erro criando perfil inicial:', perfilError);
-                setErro('Erro criando perfil: ' + (perfilError.message || JSON.stringify(perfilError)));
+                // Tentativa de fallback: inserir um registro mínimo para não perder o cadastro
+                try {
+                  const fallbackPayload = {
+                    id: user.id,
+                    nome: nome || '',
+                    email_contato: email || null,
+                    is_admin: false,
+                    acesso_escalas: false,
+                    acesso_repertorio: false,
+                    acesso_avisos: false
+                  };
+                  const fallbackRes = await supabase.from('perfis').insert([fallbackPayload]);
+                  console.log('perfil fallback result', fallbackRes);
+                  if (fallbackRes.error) {
+                    console.error('Fallback também falhou:', fallbackRes.error);
+                    setErro('Erro criando perfil: ' + (perfilError.message || JSON.stringify(perfilError)) + '\nFallback falhou: ' + (fallbackRes.error.message || JSON.stringify(fallbackRes.error)));
+                  } else {
+                    // fallback funcionou — informar admin e continuar
+                    setMensagem('Conta criada com sucesso! Perfil salvo em modo fallback. Aguarde aprovação do administrador.');
+                  }
+                } catch (fbErr) {
+                  console.error('Erro no fallback de perfil:', fbErr);
+                  setErro('Erro criando perfil e fallback falhou: ' + (fbErr.message || JSON.stringify(fbErr)));
+                }
+              } else {
+                // perfil criado com sucesso
+                setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
               }
 
 
