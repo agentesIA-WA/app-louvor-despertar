@@ -36,7 +36,7 @@ export default function Dashboard({ session }) {
       // Pedimos um array com limite de 1. Assim, se vier vazio ou vierem 5, não dá erro.
       const { data: perfilDataArray, error: perfilError } = await supabase
         .from('perfis')
-        .select('nome')
+        .select('nome, is_admin')
         .eq('id', userId)
         .limit(1);
 
@@ -78,12 +78,13 @@ export default function Dashboard({ session }) {
 
       setAniversariantes(niverData || []);
 
-      // 4. AVISOS
-      const { data: avData } = await supabase
-        .from('avisos')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(2);
+      // 4. AVISOS (apenas avisos em vigência)
+      const hojeISO = new Date().toISOString().split('T')[0];
+      let queryAvisos = supabase.from('avisos').select('*').or(`data_expiracao.is.null,data_expiracao.gte.${hojeISO}`);
+      // se o perfil não for admin, filtra avisos administrativos
+      const isAdmin = perfilDataArray && perfilDataArray.length > 0 && perfilDataArray[0].is_admin;
+      if (!isAdmin) queryAvisos = queryAvisos.not('titulo', 'like', 'ADMIN:%');
+      const { data: avData } = await queryAvisos.order('created_at', { ascending: false });
       setAvisos(avData || []);
 
     } catch (err) {
