@@ -251,6 +251,7 @@ export default function Escalas({ session }) {
       )}
 
       {abaAtiva === 'ranking' && (
+        <>
         <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Users size={18} /> Ranking de Participação</h3>
           <div className="grid md:grid-cols-3 gap-4 mb-6">
@@ -310,6 +311,7 @@ export default function Escalas({ session }) {
             </div>
           </div>
         )}
+        </>
       )}
 
       {/* ABA INDISPONIBILIDADE (LAYOUT REDESENHADO) */}
