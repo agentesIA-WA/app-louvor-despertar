@@ -59,11 +59,14 @@ export default function Dashboard({ session }) {
         .eq('membro_id', userId);
       
       if (escData) {
+        const hojeStart = new Date();
+        hojeStart.setHours(0,0,0,0);
         const filtradas = escData
           .filter(item => {
             if (!item.escalas?.data_escala) return false;
             const d = new Date(item.escalas.data_escala + 'T00:00:00');
-            return d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
+            // Excluir escalas com data anterior a hoje e manter apenas escalas do mês/ano atuais
+            return d >= hojeStart && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
           })
           .sort((a, b) => new Date(a.escalas.data_escala) - new Date(b.escalas.data_escala));
         setMinhasEscalas(filtradas);
