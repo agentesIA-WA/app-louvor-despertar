@@ -23,6 +23,12 @@ export default function Perfil({ session }) {
   const [equipe, setEquipe] = useState([]);
   const [pendingUsuarios, setPendingUsuarios] = useState([]); // Usuários aguardando validação
   const [aprovandoId, setAprovandoId] = useState(null);
+  const [notificacao, setNotificacao] = useState(null);
+
+  function mostrarNotificacao(tipo, texto) {
+    setNotificacao({ tipo, texto });
+    setTimeout(() => setNotificacao(null), 3000);
+  }
   
   // Estado para controlar qual membro está sendo editado no Modal
   const [membroEditando, setMembroEditando] = useState(null);
@@ -164,7 +170,15 @@ export default function Perfil({ session }) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-10 p-4 animate-fade-in pb-20">
-      
+      {notificacao && (
+        <div className="fixed top-5 right-5 z-[70] animate-fade-in">
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-white font-bold ${notificacao.tipo === 'sucesso' ? 'bg-green-500' : 'bg-red-500'}`}>
+            {notificacao.tipo === 'sucesso' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
+            {notificacao.texto}
+          </div>
+        </div>
+      )}
+
       <div className="px-2">
         <h2 className="text-5xl font-black text-slate-800 tracking-tighter italic">
           Configurações
