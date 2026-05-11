@@ -146,23 +146,26 @@ export default function Perfil({ session }) {
   // Aprovar usuário pendente
   async function aprovarUsuario(usuarioId) {
     try {
+      console.log('[Perfil] aprovarUsuario called for', usuarioId);
       setAprovandoId(usuarioId);
-      const { error } = await supabase.from('perfis').update({
+      const res = await supabase.from('perfis').update({
         acesso_escalas: true,
         acesso_repertorio: true,
         acesso_avisos: true
       }).eq('id', usuarioId);
+      console.log('[Perfil] supabase update result:', res);
+      const error = res.error;
       if (error) throw error;
 
       // atualizar listas locais
-      setPendingUsuarios(pendingUsuarios.filter(u => u.id !== usuarioId));
+      setPendingUsuarios(prev => prev.filter(u => u.id !== usuarioId));
       const { data: novoUsuario } = await supabase.from('perfis').select('id, nome, is_admin, acesso_escalas, acesso_repertorio, acesso_avisos').eq('id', usuarioId).maybeSingle();
       if (novoUsuario) setEquipe(prev => [novoUsuario, ...prev]);
 
       mostrarNotificacao('sucesso', 'Usuário aprovado com sucesso!');
     } catch (err) {
       console.error('Erro aprovando usuário:', err);
-      mostrarNotificacao('erro', 'Erro ao aprovar usuário: ' + (err.message || 'tente novamente'));
+      mostrarNotificacao('erro', 'Erro ao aprovar usuário: ' + (err.message || JSON.stringify(err)));
     } finally {
       setAprovandoId(null);
     }
