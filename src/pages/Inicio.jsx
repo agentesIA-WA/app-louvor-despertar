@@ -34,18 +34,20 @@ export default function Inicio({ session }) {
       // 1. Buscar Nome do Usuário Logado
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('nome')
+        .select('nome, is_admin')
         .eq('id', session.user.id)
         .maybeSingle();
       if (perfil) setNomeUsuario(perfil.nome.split(' ')[0]);
 
-      // 2. Buscar Avisos (Design atualizado)
-      const { data: avisos } = await supabase
-        .from('avisos')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(2);
-      setAvisosRecentes(avisos || []);
+      // 2. Buscar Avisos (apenas avisos em vigência)
+      const hojeISO = new Date().toISOString().split('T')[0];
+      let query = supabase.from('avisos').select('*').or(`data_expiracao.is.null,data_expiracao.gte.${hojeISO}`);
+      if (!perfil?.is_admin) {
+        query = query.not('titulo', 'like', 'ADMIN:%');
+      }
+      const { data: avisosData, error: avisosError } = await query.order('created_at', { ascending: false }).limit(1);
+      if (avisosError) throw avisosError;
+      setAvisosRecentes(avisosData || []);
 
       // 3. Buscar TODAS as escalas do membro (Filtro de mês feito no JS para segurança)
       const { data: participacoes } = await supabase
