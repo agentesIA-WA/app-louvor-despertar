@@ -18,6 +18,10 @@ export default function Escalas({ session }) {
   const [rankingEnd, setRankingEnd] = useState('');
   const [rankingResults, setRankingResults] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserName, setSelectedUserName] = useState('');
+  const [selectedParticipations, setSelectedParticipations] = useState([]);
 
   // Estados Admin (Escala e Montagem)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -142,6 +146,38 @@ export default function Escalas({ session }) {
     }
   }
 
+  // Busca participações detalhadas de um membro dentro do intervalo atual
+  async function fetchParticipations(membroId, start, end) {
+    try {
+      const s = start ? new Date(start + 'T00:00:00') : new Date('1970-01-01');
+      const e = end ? new Date(end + 'T23:59:59') : new Date('9999-12-31');
+      const { data } = await supabase
+        .from('escala_membros')
+        .select('escalas(titulo,data_escala)')
+        .eq('membro_id', membroId);
+      const participations = (data || [])
+        .map(item => item.escalas)
+        .filter(es => !!es)
+        .filter(es => {
+          const d = new Date(es.data_escala + 'T00:00:00');
+          return d >= s && d <= e;
+        })
+        .sort((a,b) => new Date(a.data_escala) - new Date(b.data_escala));
+      return participations;
+    } catch (err) {
+      console.error('Erro ao buscar participações:', err);
+      return [];
+    }
+  }
+
+  async function handleOpenDetails(membroId, nome) {
+    setSelectedUserId(membroId);
+    setSelectedUserName(nome);
+    const parts = await fetchParticipations(membroId, rankingStart, rankingEnd);
+    setSelectedParticipations(parts);
+    setShowDetailsModal(true);
+  }
+
   async function handleSalvarEscalaBase(e) {
     e.preventDefault();
     try {
@@ -242,7 +278,7 @@ export default function Escalas({ session }) {
                   <div className="flex items-center gap-4">
                     <div className="bg-white w-12 h-12 rounded-2xl flex items-center justify-center font-black">{i+1}</div>
                     <div>
-                      <p className="font-black text-slate-800">{r.nome}</p>
+                      <p className="font-black text-slate-800"><button onClick={() => handleOpenDetails(r.id, r.nome)} className="text-left underline font-black text-slate-800">{r.nome}</button></p>
                       <p className="text-[10px] text-slate-400 uppercase">Participações: {r.count}</p>
                     </div>
                   </div>
@@ -251,6 +287,29 @@ export default function Escalas({ session }) {
             </div>
           )}
         </div>
+
+        {showDetailsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6">
+              <div className="flex justify-between items-start">
+                <h4 className="font-black text-lg">Participações de {selectedUserName}</h4>
+                <button onClick={() => setShowDetailsModal(false)} className="text-slate-400 font-bold">Fechar</button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {selectedParticipations.length === 0 ? (
+                  <p className="text-slate-500 italic">Nenhuma participação neste período.</p>
+                ) : (
+                  selectedParticipations.map((p, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-2xl">
+                      <p className="font-bold">{p.titulo}</p>
+                      <p className="text-sm text-slate-400">{new Date(p.data_escala).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       )}
 
       {/* ABA INDISPONIBILIDADE (LAYOUT REDESENHADO) */}
