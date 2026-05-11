@@ -49,7 +49,7 @@ export default function Perfil({ session }) {
         .eq('id', session.user.id)
         .maybeSingle();
 
-      if (usuarioLogado) {
+      if (usuarioLogado) { console.log('[Perfil] usuarioLogado', usuarioLogado);
         setPerfil({
           nome: usuarioLogado.nome || '',
           aniversario_dia: usuarioLogado.aniversario_dia || '',
@@ -71,10 +71,11 @@ export default function Perfil({ session }) {
             .from('perfis')
             .select('id, nome')
             .eq('is_admin', false)
-            .eq('acesso_escalas', false)
-            .eq('acesso_repertorio', false)
-            .eq('acesso_avisos', false)
+            .not('acesso_escalas', 'eq', true)
+            .not('acesso_repertorio', 'eq', true)
+            .not('acesso_avisos', 'eq', true)
             .order('nome', { ascending: true });
+          console.log('[Perfil] pendentes fetched', pendentes);
           setPendingUsuarios(pendentes || []);
         } else {
           const { data: listaEquipe } = await supabase
