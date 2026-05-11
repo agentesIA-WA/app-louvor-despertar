@@ -14,6 +14,10 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Perfil/approval states must be declared unconditionally to avoid hooks order change
+  const [perfil, setPerfil] = useState(null);
+  const [checkingApproval, setCheckingApproval] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -27,25 +31,12 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 italic font-black text-indigo-600 animate-pulse">
-        CARREGANDO...
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Login />;
-  }
-
-  // Checar perfil do usuário para saber se já foi aprovado
-  const [perfil, setPerfil] = useState(null);
-  const [checkingApproval, setCheckingApproval] = useState(true);
-
+  // Quando houver sessão, dispara verificação do perfil
   useEffect(() => {
     let mounted = true;
     async function loadPerfil() {
+      if (!session) return;
+      setCheckingApproval(true);
       try {
         const { data } = await supabase.from('perfis').select('id, nome, is_admin, acesso_escalas, acesso_repertorio, acesso_avisos').eq('id', session.user.id).maybeSingle();
         if (!mounted) return;
@@ -59,6 +50,18 @@ export default function App() {
     loadPerfil();
     return () => { mounted = false; };
   }, [session]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 italic font-black text-indigo-600 animate-pulse">
+        CARREGANDO...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login />;
+  }
 
   // Enquanto verificando, mostrar loading
   if (checkingApproval) {
