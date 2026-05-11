@@ -13,7 +13,6 @@ export default function Login() {
   const [aniversario_dia, setAniversarioDia] = useState('');
   const [aniversario_mes, setAniversarioMes] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [data_nascimento, setDataNascimento] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
@@ -75,35 +74,30 @@ export default function Login() {
           try {
             const user = data?.user;
             if (user) {
-              // Derivar dia/mês de data_nascimento se informado
-              let dia = aniversario_dia || null;
-              let mes = aniversario_mes || null;
-              if (data_nascimento) {
-                const d = new Date(data_nascimento + 'T00:00:00');
-                if (!isNaN(d)) {
-                  dia = String(d.getUTCDate());
-                  mes = String(d.getUTCMonth() + 1);
-                }
-              }
-
               const perfilPayload = {
                 id: user.id,
                 nome: nome || '',
                 funcao: funcao || '',
                 telefone: telefone || null,
                 is_admin: false,
-                aniversario_dia: dia ? parseInt(dia) : null,
-                aniversario_mes: mes ? parseInt(mes) : null,
+                aniversario_dia: aniversario_dia ? parseInt(aniversario_dia) : null,
+                aniversario_mes: aniversario_mes ? parseInt(aniversario_mes) : null,
                 whatsapp: whatsapp || null,
                 email_contato: email || null,
-                data_nascimento: data_nascimento || null,
+                data_nascimento: null,
                 acesso_escalas: false,
                 acesso_repertorio: false,
                 acesso_avisos: false
               };
 
-              const { error: perfilError } = await supabase.from('perfis').insert([perfilPayload]);
-              if (perfilError) console.error('Erro criando perfil inicial:', perfilError);
+              const perfilRes = await supabase.from('perfis').insert([perfilPayload]);
+              console.log('perfil insert result', perfilRes);
+              const perfilError = perfilRes.error;
+              if (perfilError) {
+                console.error('Erro criando perfil inicial:', perfilError);
+                setErro('Erro criando perfil: ' + (perfilError.message || JSON.stringify(perfilError)));
+              }
+
 
               // Cria um aviso administrativo para notificar administradores sobre novo cadastro
               try {
@@ -117,11 +111,14 @@ export default function Login() {
             }
           } catch (err) {
             console.error('Erro ao criar perfil inicial:', err);
+            setErro('Erro ao criar perfil inicial: ' + (err.message || JSON.stringify(err)));
           }
 
-          setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
-          setIsLogin(true);
-          setSenha('');
+          if (!erro) {
+            setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
+            setIsLogin(true);
+            setSenha('');
+          }
         }
       } catch (err) {
         console.error('Erro no signUp:', err);
@@ -191,7 +188,7 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Dia de nascimento</label>
                   <input type="number" min="1" max="31" value={aniversario_dia} onChange={e => setAniversarioDia(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" />
@@ -199,10 +196,6 @@ export default function Login() {
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Mês de nascimento</label>
                   <input type="number" min="1" max="12" value={aniversario_mes} onChange={e => setAniversarioMes(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Data de Nascimento</label>
-                  <input type="date" value={data_nascimento} onChange={e => setDataNascimento(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" />
                 </div>
               </div>
             </>
