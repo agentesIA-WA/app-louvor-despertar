@@ -13,6 +13,12 @@ export default function Escalas({ session }) {
   const [notificacao, setNotificacao] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState('escalas');
 
+  // Ranking de participação
+  const [rankingStart, setRankingStart] = useState('');
+  const [rankingEnd, setRankingEnd] = useState('');
+  const [rankingResults, setRankingResults] = useState([]);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+
   // Estados Admin (Escala e Montagem)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [escalaParaEditar, setEscalaParaEditar] = useState(null);
@@ -106,6 +112,36 @@ export default function Escalas({ session }) {
     setEscalaMusicas(mus || []);
   }
 
+  // --- RANKING DE PARTICIPAÇÃO ---
+  async function fetchRanking(start, end) {
+    try {
+      setLoadingRanking(true);
+      const { data } = await supabase.from('escala_membros').select('membro_id, perfis(id,nome), escalas(data_escala)');
+      const entries = data || [];
+      const s = start ? new Date(start + 'T00:00:00') : new Date('1970-01-01');
+      const e = end ? new Date(end + 'T23:59:59') : new Date('9999-12-31');
+      const counts = {};
+      for (const en of entries) {
+        const dStr = en.escalas?.data_escala;
+        if (!dStr) continue;
+        const d = new Date(dStr + 'T00:00:00');
+        if (d >= s && d <= e) {
+          const id = en.membro_id;
+          const nome = en.perfis?.nome || 'Desconhecido';
+          if (!counts[id]) counts[id] = { id, nome, count: 0 };
+          counts[id].count += 1;
+        }
+      }
+      const arr = Object.values(counts).sort((a,b) => b.count - a.count);
+      setRankingResults(arr);
+    } catch (err) {
+      console.error('Erro ao buscar ranking:', err);
+      setRankingResults([]);
+    } finally {
+      setLoadingRanking(false);
+    }
+  }
+
   async function handleSalvarEscalaBase(e) {
     e.preventDefault();
     try {
@@ -137,6 +173,7 @@ export default function Escalas({ session }) {
           <div className="flex bg-slate-100 p-1 rounded-2xl mt-4 w-fit">
             <button onClick={() => setAbaAtiva('escalas')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'escalas' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Visualizar Escalas</button>
             <button onClick={() => setAbaAtiva('minha-disponibilidade')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'minha-disponibilidade' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Minha Disponibilidade</button>
+            <button onClick={() => setAbaAtiva('ranking')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'ranking' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Ranking de Participação</button>
           </div>
         </div>
         {meuPerfil?.is_admin && abaAtiva === 'escalas' && (
@@ -174,6 +211,45 @@ export default function Escalas({ session }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {abaAtiva === 'ranking' && (
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Users size={18} /> Ranking de Participação</h3>
+          <div className="grid md:grid-cols-3 gap-4 mb-6">
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Início</label>
+              <input type="date" value={rankingStart} onChange={e => setRankingStart(e.target.value)} className="w-full p-3 bg-slate-50 rounded-2xl" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fim</label>
+              <input type="date" value={rankingEnd} onChange={e => setRankingEnd(e.target.value)} className="w-full p-3 bg-slate-50 rounded-2xl" />
+            </div>
+            <div className="flex items-end">
+              <button onClick={() => fetchRanking(rankingStart, rankingEnd)} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold">Gerar Ranking</button>
+            </div>
+          </div>
+
+          {loadingRanking ? (
+            <div className="text-center py-8">Gerando ranking...</div>
+          ) : rankingResults.length === 0 ? (
+            <p className="text-slate-500 italic">Nenhuma participação encontrada no período selecionado.</p>
+          ) : (
+            <div className="space-y-3">
+              {rankingResults.map((r, i) => (
+                <div key={r.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-white w-12 h-12 rounded-2xl flex items-center justify-center font-black">{i+1}</div>
+                    <div>
+                      <p className="font-black text-slate-800">{r.nome}</p>
+                      <p className="text-[10px] text-slate-400 uppercase">Participações: {r.count}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
