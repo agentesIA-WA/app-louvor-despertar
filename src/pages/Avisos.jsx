@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Bell, Plus, Trash2, Edit2, Send, CheckCircle, AlertCircle, X, Megaphone, MessageSquare, Calendar } from 'lucide-react';
 
-export default function Avisos({ session }) {
+export default function Avisos({ session, perfil }) {
   const [avisos, setAvisos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [meuPerfil, setMeuPerfil] = useState(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [avisoParaEditar, setAvisoParaEditar] = useState(null);
@@ -16,7 +15,7 @@ export default function Avisos({ session }) {
 
   useEffect(() => {
     fetchDados();
-  }, [session]);
+  }, [session, perfil]);
 
   function mostrarNotificacao(tipo, texto) {
     setNotificacao({ tipo, texto });
@@ -26,14 +25,6 @@ export default function Avisos({ session }) {
   async function fetchDados() {
     try {
       setLoading(true);
-
-      // Primeiro carrega o perfil do usuário para decidir quais avisos mostrar
-      let perfil = null;
-      if (session?.user) {
-        const { data } = await supabase.from('perfis').select('*').eq('id', session.user.id).maybeSingle();
-        perfil = data;
-        if (perfil) setMeuPerfil(perfil);
-      }
 
       const hoje = new Date().toISOString().split('T')[0];
 
@@ -133,7 +124,7 @@ export default function Avisos({ session }) {
           <h2 className="text-2xl font-bold text-slate-800">Quadro de Avisos</h2>
           <p className="text-sm text-slate-500">Avisos ativos no momento</p>
         </div>
-        {meuPerfil?.is_admin && (
+        {perfil?.is_admin && (
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white p-3 rounded-2xl shadow-lg flex items-center gap-2 font-bold hover:bg-blue-700 transition">
             <Plus size={20} /> <span className="hidden md:inline">Novo Aviso</span>
           </button>
@@ -170,7 +161,7 @@ export default function Avisos({ session }) {
                 </div>
                 <p className="text-slate-600 text-sm whitespace-pre-wrap leading-relaxed mb-4">{aviso.mensagem}</p>
                 <div className="flex flex-wrap justify-end gap-2 border-t border-slate-50 pt-4">
-                  {meuPerfil?.is_admin && (
+                  {perfil?.is_admin && (
                     <>
                       <button onClick={() => abrirEdicao(aviso)} className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition">
                         <Edit2 size={14} /> Editar

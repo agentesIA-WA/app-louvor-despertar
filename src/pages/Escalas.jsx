@@ -6,10 +6,9 @@ import {
   CalendarOff, UserCheck, Info, Clock, ChevronRight
 } from 'lucide-react';
 
-export default function Escalas({ session }) {
+export default function Escalas({ session, perfil }) {
   const [escalas, setEscalas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [meuPerfil, setMeuPerfil] = useState(null);
   const [notificacao, setNotificacao] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState('escalas');
 
@@ -29,6 +28,9 @@ export default function Escalas({ session }) {
   const [titulo, setTitulo] = useState('');
   const [dataEscala, setDataEscala] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [equipes, setEquipes] = useState([]);
+  const [equipeId, setEquipeId] = useState('');
+  const [filtroEquipeId, setFiltroEquipeId] = useState('todas');
 
   const [escalaAtiva, setEscalaAtiva] = useState(null);
   const [membrosDisponiveis, setMembrosDisponiveis] = useState([]);
@@ -39,6 +41,15 @@ export default function Escalas({ session }) {
   const [membrosParaAdicionar, setMembrosParaAdicionar] = useState([]);
   const [musicasParaAdicionar, setMusicasParaAdicionar] = useState([]);
   const [escalaParaVer, setEscalaParaVer] = useState(null);
+  
+  // Busca no repertório (Painel Montagem)
+  const [buscaMusica, setBuscaMusica] = useState('');
+
+  // Estados Indisponibilidade Geral (Admin)
+  const [todasIndisponibilidades, setTodasIndisponibilidades] = useState([]);
+  const [filtroIndStart, setFiltroIndStart] = useState('');
+  const [filtroIndEnd, setFiltroIndEnd] = useState('');
+  const [loadingIndisponibilidade, setLoadingIndisponibilidade] = useState(false);
 
   // Estados Disponibilidade (Membro)
   const [minhasIndisponibilidades, setMinhasIndisponibilidades] = useState([]);
@@ -47,7 +58,7 @@ export default function Escalas({ session }) {
 
   useEffect(() => {
     fetchDados();
-  }, [session]);
+  }, [session, perfil]);
 
   function mostrarNotificacao(tipo, texto) {
     setNotificacao({ tipo, texto });
@@ -57,15 +68,20 @@ export default function Escalas({ session }) {
   async function fetchDados() {
     try {
       setLoading(true);
-      const { data: escalasData } = await supabase.from('escalas').select('*').order('data_escala', { ascending: true });
+      const { data: escalasData } = await supabase
+        .from('escalas')
+        .select('*, equipes(nome)')
+        .order('data_escala', { ascending: true });
       setEscalas(escalasData || []);
 
-      const { data: { session: activeSession } } = await supabase.auth.getSession();
-      const user = activeSession?.user || session?.user;
-      if (user) {
-        const { data: perfil } = await supabase.from('perfis').select('*').eq('id', user.id).maybeSingle();
-        setMeuPerfil(perfil);
-        fetchMinhasIndisponibilidades(user.id);
+      const { data: equipesData } = await supabase
+        .from('equipes')
+        .select('*')
+        .order('nome');
+      setEquipes(equipesData || []);
+
+      if (session?.user) {
+        fetchMinhasIndisponibilidades(session.user.id);
       }
     } catch (error) { console.error(error); } finally { setLoading(false); }
   }
@@ -74,6 +90,28 @@ export default function Escalas({ session }) {
   async function fetchMinhasIndisponibilidades(userId) {
     const { data } = await supabase.from('indisponibilidade').select('*').eq('membro_id', userId).order('data_bloqueio');
     setMinhasIndisponibilidades(data || []);
+  }
+
+  async function fetchTodasIndisponibilidades() {
+    try {
+      setLoadingIndisponibilidade(true);
+      let query = supabase
+        .from('indisponibilidade')
+        .select('*, perfis(nome)')
+        .order('data_bloqueio', { ascending: true });
+
+      if (filtroIndStart) query = query.gte('data_bloqueio', filtroIndStart);
+      if (filtroIndEnd) query = query.lte('data_bloqueio', filtroIndEnd);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setTodasIndisponibilidades(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar indisponibilidades gerais:', err);
+      mostrarNotificacao('erro', 'Erro ao carregar indisponibilidades.');
+    } finally {
+      setLoadingIndisponibilidade(false);
+    }
   }
 
   async function registrarIndisponibilidade() {
@@ -97,14 +135,28 @@ export default function Escalas({ session }) {
     setMembrosParaAdicionar([]);
     setMusicasParaAdicionar([]);
     try {
-      const { data: perfis } = await supabase.from('perfis').select('id, nome').order('nome');
+      let query = supabase.from('perfis').select('id, nome').order('nome');
+      
+      if (escala.equipe_id) {
+        const { data: vinculos } = await supabase
+          .from('perfil_equipes')
+          .select('perfil_id')
+          .eq('equipe_id', escala.equipe_id);
+        const idsMembros = vinculos?.map(v => v.perfil_id) || [];
+        query = query.in('id', idsMembros);
+      }
+
+      const { data: perfis } = await query;
       const { data: bloqueados } = await supabase.from('indisponibilidade').select('membro_id').eq('data_bloqueio', escala.data_escala);
       const idsBloqueados = bloqueados?.map(b => b.membro_id) || [];
       setMembrosDisponiveis(perfis?.filter(p => !idsBloqueados.includes(p.id)) || []);
       const { data: repertorio } = await supabase.from('repertorio').select('id, titulo').order('titulo');
       setMusicasDisponiveis(repertorio || []);
       await carregarDetalhes(escala.id);
-    } catch (error) { mostrarNotificacao('erro', 'Erro ao carregar dados.'); }
+    } catch (error) { 
+      console.error(error);
+      mostrarNotificacao('erro', 'Erro ao carregar dados.'); 
+    }
   }
 
   async function carregarDetalhes(escalaId) {
@@ -178,10 +230,16 @@ export default function Escalas({ session }) {
     setShowDetailsModal(true);
   }
 
+  useEffect(() => {
+    if (abaAtiva === 'indisponibilidade-geral') {
+      fetchTodasIndisponibilidades();
+    }
+  }, [abaAtiva]);
+
   async function handleSalvarEscalaBase(e) {
     e.preventDefault();
     try {
-      const payload = { titulo, data_escala: dataEscala, observacoes };
+      const payload = { titulo, data_escala: dataEscala, observacoes, equipe_id: equipeId || null };
       const { error } = escalaParaEditar 
         ? await supabase.from('escalas').update(payload).eq('id', escalaParaEditar.id)
         : await supabase.from('escalas').insert([payload]);
@@ -209,11 +267,14 @@ export default function Escalas({ session }) {
           <div className="flex bg-slate-100 p-1 rounded-2xl mt-4 w-fit">
             <button onClick={() => setAbaAtiva('escalas')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'escalas' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Visualizar Escalas</button>
             <button onClick={() => setAbaAtiva('minha-disponibilidade')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'minha-disponibilidade' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Minha Disponibilidade</button>
+            {perfil?.is_admin && (
+              <button onClick={() => setAbaAtiva('indisponibilidade-geral')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'indisponibilidade-geral' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Indisponibilidade Geral</button>
+            )}
             <button onClick={() => setAbaAtiva('ranking')} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${abaAtiva === 'ranking' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Ranking de Participação</button>
           </div>
         </div>
-        {meuPerfil?.is_admin && abaAtiva === 'escalas' && (
-          <button onClick={() => { setEscalaParaEditar(null); setTitulo(''); setDataEscala(''); setObservacoes(''); setIsModalOpen(true); }} className="bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center gap-2 font-black hover:bg-indigo-700 transition-all active:scale-95">
+        {perfil?.is_admin && abaAtiva === 'escalas' && (
+          <button onClick={() => { setEscalaParaEditar(null); setTitulo(''); setDataEscala(''); setObservacoes(''); setEquipeId(''); setIsModalOpen(true); }} className="bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center gap-2 font-black hover:bg-indigo-700 transition-all active:scale-95">
             <Plus size={20} /> Nova Escala
           </button>
         )}
@@ -221,16 +282,46 @@ export default function Escalas({ session }) {
 
       {/* ABA ESCALAS */}
       {abaAtiva === 'escalas' && (
-        <div className="grid gap-4 animate-fade-in">
-          {escalas.map(e => (
-            <div key={e.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 group hover:border-indigo-100 transition-all">
+        <div className="space-y-6 animate-fade-in">
+          {/* Filtro por Equipe */}
+          <div className="flex items-center gap-3 bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm w-fit">
+            <Users size={18} className="text-slate-400 ml-2" />
+            <select 
+              value={filtroEquipeId} 
+              onChange={e => setFiltroEquipeId(e.target.value)}
+              className="bg-transparent border-none outline-none font-bold text-sm text-slate-600 pr-8 cursor-pointer"
+            >
+              <option value="todas">Todas as Equipes</option>
+              {equipes.map(eq => (
+                <option key={eq.id} value={eq.id}>{eq.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid gap-4">
+            {escalas.filter(e => filtroEquipeId === 'todas' || e.equipe_id === filtroEquipeId).length === 0 ? (
+              <div className="bg-white border-2 border-dashed border-slate-100 p-20 rounded-[3rem] text-center">
+                <p className="text-slate-300 font-bold italic">Nenhuma escala encontrada para esta equipe.</p>
+              </div>
+            ) : (
+              escalas
+                .filter(e => filtroEquipeId === 'todas' || e.equipe_id === filtroEquipeId)
+                .map(e => (
+                <div key={e.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 group hover:border-indigo-100 transition-all">
               <div className="flex items-center gap-6">
                 <div className="bg-slate-50 text-indigo-600 p-5 rounded-[1.8rem] group-hover:bg-indigo-50 transition-colors"><CalendarDays size={32} /></div>
                 <div>
                   <h3 className="font-black text-slate-800 text-xl tracking-tight">{e.titulo}</h3>
-                  <p className="text-indigo-600 font-bold text-sm flex items-center gap-2">
-                    <Calendar size={14}/> {new Date(e.data_escala).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
-                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                    <p className="text-indigo-600 font-bold text-sm flex items-center gap-2">
+                      <Calendar size={14}/> {new Date(e.data_escala).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                    </p>
+                    {e.equipes?.nome && (
+                      <p className="text-slate-400 font-bold text-sm flex items-center gap-2">
+                        <Users size={14}/> {e.equipes.nome}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-2 w-full md:w-auto">
@@ -241,12 +332,72 @@ export default function Escalas({ session }) {
                   ]);
                   setEscalaParaVer({ ...e, membros: m, musicas: mus });
                 }} className="flex-1 md:flex-none p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center justify-center gap-2 font-bold text-sm"><Search size={18}/> Detalhes</button>
-                {meuPerfil?.is_admin && (
-                  <button onClick={() => abrirPainelMontagem(e)} className="flex-[2] md:flex-none bg-indigo-600 text-white font-black px-8 py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-50 active:scale-95"><Settings2 size={18} /> Montar</button>
+                {perfil?.is_admin && (
+                  <>
+                    <button onClick={() => {
+                      setEscalaParaEditar(e);
+                      setTitulo(e.titulo);
+                      setDataEscala(e.data_escala);
+                      setObservacoes(e.observacoes || '');
+                      setEquipeId(e.equipe_id || '');
+                      setIsModalOpen(true);
+                    }} className="flex-1 md:flex-none p-4 bg-slate-50 text-slate-600 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center justify-center gap-2 font-bold text-sm"><Edit2 size={18}/> Editar</button>
+                    <button onClick={() => abrirPainelMontagem(e)} className="flex-[2] md:flex-none bg-indigo-600 text-white font-black px-8 py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-50 active:scale-95"><Settings2 size={18} /> Montar</button>
+                  </>
                 )}
               </div>
             </div>
-          ))}
+          ))
+        )}
+          </div>
+        </div>
+      )}
+
+      {abaAtiva === 'indisponibilidade-geral' && perfil?.is_admin && (
+        <div className="animate-fade-in space-y-6">
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+              <CalendarOff size={18} className="text-rose-500" /> Indisponibilidade da Equipe
+            </h3>
+            
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Data Inicial</label>
+                <input type="date" value={filtroIndStart} onChange={e => setFiltroIndStart(e.target.value)} className="w-full p-3 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-rose-500 transition-all" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Data Final</label>
+                <input type="date" value={filtroIndEnd} onChange={e => setFiltroIndEnd(e.target.value)} className="w-full p-3 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-rose-500 transition-all" />
+              </div>
+              <div className="flex items-end">
+                <button onClick={fetchTodasIndisponibilidades} className="w-full bg-slate-900 text-white py-3 rounded-2xl font-black hover:bg-slate-800 transition active:scale-[0.98]">Filtrar Período</button>
+              </div>
+            </div>
+
+            {loadingIndisponibilidade ? (
+              <div className="text-center py-10"><p className="text-slate-400 animate-pulse font-bold">Carregando bloqueios...</p></div>
+            ) : todasIndisponibilidades.length === 0 ? (
+              <div className="text-center py-10 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-100">
+                <p className="text-slate-400 italic">Nenhum bloqueio encontrado para este período.</p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {todasIndisponibilidades.map(ind => (
+                  <div key={ind.id} className="bg-slate-50 p-6 rounded-[2.2rem] border border-slate-100 flex items-start gap-4">
+                    <div className="bg-white text-rose-500 w-14 h-14 rounded-2xl flex flex-col items-center justify-center shadow-sm shrink-0 border border-rose-50">
+                      <span className="text-[9px] font-black uppercase leading-none mb-1">{new Date(ind.data_bloqueio).toLocaleDateString('pt-BR', { month: 'short', timeZone: 'UTC' })}</span>
+                      <span className="text-xl font-black leading-none">{new Date(ind.data_bloqueio).toLocaleDateString('pt-BR', { day: '2-digit', timeZone: 'UTC' })}</span>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-black text-slate-800 text-sm leading-none">{ind.perfis?.nome || 'Usuário Removido'}</p>
+                      <p className="text-[10px] text-rose-500 font-black uppercase tracking-widest">Ausência Comunicada</p>
+                      <p className="text-slate-500 text-xs font-medium italic mt-1 leading-relaxed">"{ind.motivo || 'Sem motivo detalhado'}"</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -375,7 +526,7 @@ export default function Escalas({ session }) {
           <div className="bg-white w-full max-w-6xl h-full md:h-[90vh] rounded-[3rem] shadow-2xl flex flex-col overflow-hidden">
             <div className="bg-indigo-600 p-8 text-white flex justify-between items-center">
               <div>
-                <h3 className="text-2xl font-black">Escalando: {escalaAtiva.titulo}</h3>
+                <h3 className="text-2xl font-black">Escala: {escalaAtiva.titulo}</h3>
                 <div className="flex items-center gap-4 mt-1">
                   <p className="text-indigo-100 text-sm font-bold flex items-center gap-2"><UserCheck size={16}/> Filtrando membros disponíveis</p>
                   <p className="text-indigo-100 text-sm font-bold flex items-center gap-2"><Calendar size={16}/> {new Date(escalaAtiva.data_escala).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
@@ -389,13 +540,28 @@ export default function Escalas({ session }) {
                 <h4 className="text-xl font-black text-slate-800 flex items-center gap-2 border-b pb-4"><Users className="text-indigo-600" /> Equipe</h4>
                 <div className="bg-slate-50 p-6 rounded-[2.5rem] space-y-6">
                   <div className="flex flex-wrap gap-2">
-                    {membrosDisponiveis.map(m => (
-                      <button key={m.id} onClick={() => {
-                        const existe = membrosParaAdicionar.find(i => i.id === m.id);
-                        if(existe) setMembrosParaAdicionar(membrosParaAdicionar.filter(i => i.id !== m.id));
-                        else setMembrosParaAdicionar([...membrosParaAdicionar, {...m, funcao: 'Vocal'}]);
-                      }} className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${membrosParaAdicionar.some(i => i.id === m.id) ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:border-indigo-300 border border-transparent'}`}>{m.nome}</button>
-                    ))}
+                    {membrosDisponiveis.map(m => {
+                      const jaNaEscala = escalaMembros.some(em => em.membro_id === m.id);
+                      const selecionadoPendente = membrosParaAdicionar.some(i => i.id === m.id);
+                      
+                      return (
+                        <button 
+                          key={m.id} 
+                          disabled={jaNaEscala}
+                          onClick={() => {
+                            if(selecionadoPendente) setMembrosParaAdicionar(membrosParaAdicionar.filter(i => i.id !== m.id));
+                            else setMembrosParaAdicionar([...membrosParaAdicionar, {...m, funcao: 'Vocal'}]);
+                          }} 
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
+                            jaNaEscala ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50' :
+                            selecionadoPendente ? 'bg-indigo-600 text-white' : 
+                            'bg-white text-slate-600 hover:border-indigo-300 border border-transparent'
+                          }`}
+                        >
+                          {m.nome} {jaNaEscala && '(Já escalado)'}
+                        </button>
+                      );
+                    })}
                   </div>
                   {membrosParaAdicionar.length > 0 && (
                     <div className="space-y-3 pt-6 border-t border-slate-200">
@@ -419,7 +585,20 @@ export default function Escalas({ session }) {
                   {escalaMembros.map(em => (
                     <div key={em.id} className="flex justify-between items-center bg-white border border-slate-100 p-4 rounded-3xl">
                       <div><p className="font-black text-slate-800 text-sm">{em.perfis?.nome}</p><p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{em.funcao_na_escala}</p></div>
-                      <button onClick={async () => { await supabase.from('escala_membros').delete().eq('id', em.id); carregarDetalhes(escalaAtiva.id); }} className="text-slate-200 hover:text-rose-500 transition"><Trash2 size={18}/></button>
+                      <button 
+                        onClick={async () => { 
+                          if(confirm(`Remover ${em.perfis?.nome} desta escala?`)) {
+                            const { error } = await supabase.from('escala_membros').delete().eq('id', em.id); 
+                            if(!error) {
+                              carregarDetalhes(escalaAtiva.id);
+                              mostrarNotificacao('sucesso', 'Membro removido!');
+                            }
+                          }
+                        }} 
+                        className="text-slate-200 hover:text-rose-500 transition"
+                      >
+                        <Trash2 size={18}/>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -429,8 +608,22 @@ export default function Escalas({ session }) {
               <div className="space-y-6">
                 <h4 className="text-xl font-black text-slate-800 flex items-center gap-2 border-b pb-4"><Music className="text-indigo-600" /> Repertório</h4>
                 <div className="bg-slate-50 p-6 rounded-[2.5rem] space-y-4">
+                  {/* Busca de Músicas */}
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Pesquisar música..."
+                      className="w-full bg-white border-none rounded-2xl py-4 pl-12 pr-6 focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all text-sm"
+                      value={buscaMusica}
+                      onChange={e => setBuscaMusica(e.target.value)}
+                    />
+                  </div>
+
                   <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
-                    {musicasDisponiveis.map(m => (
+                    {musicasDisponiveis
+                      .filter(m => m.titulo.toLowerCase().includes(buscaMusica.toLowerCase()))
+                      .map(m => (
                       <label key={m.id} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-transparent hover:border-indigo-200 cursor-pointer transition">
                         <input type="checkbox" checked={musicasParaAdicionar.includes(m.id)} onChange={() => {
                           if(musicasParaAdicionar.includes(m.id)) setMusicasParaAdicionar(musicasParaAdicionar.filter(id => id !== m.id));
@@ -443,7 +636,7 @@ export default function Escalas({ session }) {
                   <button onClick={async () => {
                     const payload = musicasParaAdicionar.map((id, idx) => ({ escala_id: escalaAtiva.id, musica_id: id, ordem: escalaMusicas.length + idx + 1 }));
                     const { error } = await supabase.from('escala_musicas').insert(payload);
-                    if(!error) { setMusicasParaAdicionar([]); carregarDetalhes(escalaAtiva.id); mostrarNotificacao('sucesso', 'Repertório atualizado!'); }
+                    if(!error) { setMusicasParaAdicionar([]); carregarDetalhes(escalaAtiva.id); mostrarNotificacao('sucesso', 'Repertório atualizado!'); setBuscaMusica(''); }
                   }} className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl">Adicionar à Setlist</button>
                 </div>
                 <div className="space-y-2">
@@ -451,7 +644,20 @@ export default function Escalas({ session }) {
                     <div key={em.id} className="flex items-center gap-4 bg-white border border-slate-100 p-4 rounded-3xl">
                       <span className="bg-slate-100 text-slate-400 font-black text-[10px] w-8 h-8 flex items-center justify-center rounded-full">{idx+1}</span>
                       <p className="font-black text-slate-800 flex-1 truncate text-sm">{em.repertorio?.titulo}</p>
-                      <button onClick={async () => { await supabase.from('escala_musicas').delete().eq('id', em.id); carregarDetalhes(escalaAtiva.id); }} className="text-slate-200 hover:text-rose-500 transition"><Trash2 size={18}/></button>
+                      <button 
+                        onClick={async () => { 
+                          if(confirm(`Remover "${em.repertorio?.titulo}" da setlist?`)) {
+                            const { error } = await supabase.from('escala_musicas').delete().eq('id', em.id); 
+                            if(!error) {
+                              carregarDetalhes(escalaAtiva.id);
+                              mostrarNotificacao('sucesso', 'Música removida!');
+                            }
+                          }
+                        }} 
+                        className="text-slate-200 hover:text-rose-500 transition"
+                      >
+                        <Trash2 size={18}/>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -475,8 +681,14 @@ export default function Escalas({ session }) {
             <div className="p-12 space-y-12 print:p-8">
               <div className="text-center space-y-4 border-b pb-12">
                 <h2 className="text-4xl font-black text-indigo-600 uppercase tracking-tighter">{escalaParaVer.titulo}</h2>
-                <div className="flex items-center justify-center gap-4 text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">
+                <div className="flex flex-wrap items-center justify-center gap-4 text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">
                    <span>{new Date(escalaParaVer.data_escala).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
+                   {escalaParaVer.equipes?.nome && (
+                     <>
+                       <span className="text-indigo-200">•</span>
+                       <span>Equipe: {escalaParaVer.equipes.nome}</span>
+                     </>
+                   )}
                    <span className="text-indigo-200">•</span>
                    <span>Despertar Louvor</span>
                 </div>
@@ -529,6 +741,19 @@ export default function Escalas({ session }) {
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Data</label>
                 <input type="date" value={dataEscala} onChange={e => setDataEscala(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Equipe Responsável</label>
+                <select 
+                  value={equipeId} 
+                  onChange={e => setEquipeId(e.target.value)}
+                  className="w-full p-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-600 font-bold"
+                >
+                  <option value="">Selecione uma equipe</option>
+                  {equipes.map(eq => (
+                    <option key={eq.id} value={eq.id}>{eq.nome}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Avisos</label>

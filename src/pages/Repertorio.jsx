@@ -1,13 +1,26 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Music, Trash2, X, PlaySquare, FileText, CheckCircle, AlertCircle, Edit } from 'lucide-react';
+import { 
+  Plus, Music, Trash2, X, PlaySquare, FileText, 
+  CheckCircle, AlertCircle, Edit, Search,
+  ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
+  ArrowUpDown
+} from 'lucide-react';
 import ModalConfirmacao from '../components/ModalConfirmacao'; // Importe o modal
 
-export default function Repertorio() {
+export default function Repertorio({ perfil }) {
   const [musicas, setMusicas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [busca, setBusca] = useState('');
+
+  // Estados para Ordenação e Paginação
+  const [sortConfig, setSortConfig] = useState({ key: 'titulo', direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  const isAdmin = perfil?.is_admin === true;
   
   // Estado para o Modal de Exclusão
   const [modalExclusao, setModalExclusao] = useState({ isOpen: false, id: null });
@@ -125,6 +138,50 @@ export default function Repertorio() {
     setTitulo(''); setArtista(''); setTom(''); setBpm(''); setLinkYoutube(''); setLinkCifra('');
   }
 
+  // Função para mudar a ordenação
+  function requestSort(key) {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  }
+
+  // Lógica de filtragem, ordenação e paginação
+  const musicasFiltradas = musicas
+    .filter(musica => 
+      musica.titulo.toLowerCase().includes(busca.toLowerCase()) || 
+      (musica.artista && musica.artista.toLowerCase().includes(busca.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const valA = a[sortConfig.key] || '';
+      const valB = b[sortConfig.key] || '';
+      
+      if (typeof valA === 'string') {
+        return sortConfig.direction === 'asc' 
+          ? valA.localeCompare(valB) 
+          : valB.localeCompare(valA);
+      } else {
+        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+      }
+    });
+
+  const totalPages = Math.ceil(musicasFiltradas.length / itemsPerPage);
+  const musicasPaginadas = musicasFiltradas.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Resetar página ao buscar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [busca]);
+
+  const SortIcon = ({ column }) => {
+    if (sortConfig.key !== column) return <ArrowUpDown size={14} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />;
+  };
+
   return (
     <div className="space-y-6 animate-fade-in relative">
       
@@ -147,14 +204,28 @@ export default function Repertorio() {
         onCancel={() => setModalExclusao({ isOpen: false, id: null })}
       />
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-2xl font-bold text-slate-800">Repertório</h2>
-        <button onClick={openAddModal} className="bg-blue-600 text-white p-3 rounded-2xl shadow-md hover:bg-blue-700 transition flex items-center gap-2 font-bold text-sm">
-          <Plus size={20} /> <span className="hidden md:inline">Nova Música</span>
-        </button>
+        <div className="flex w-full md:w-auto gap-2">
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="Pesquisar por título ou artista..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
+          {isAdmin && (
+            <button onClick={openAddModal} className="bg-blue-600 text-white p-3 rounded-2xl shadow-md hover:bg-blue-700 transition flex items-center gap-2 font-bold text-sm">
+              <Plus size={20} /> <span className="hidden md:inline">Nova Música</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Lista de Músicas (Apenas substitua a chamada do botão delete) */}
+      {/* Lista de Músicas em Tabela */}
       {loading ? (
         <p className="text-center text-slate-500 py-10">Carregando canções...</p>
       ) : musicas.length === 0 ? (
@@ -163,36 +234,116 @@ export default function Repertorio() {
           <p className="text-slate-500">Nenhuma música cadastrada ainda.</p>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {musicas.map((musica) => (
-            <div key={musica.id} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group">
-              <div className="flex items-center gap-4 truncate">
-                <div className="bg-slate-50 p-3 rounded-2xl text-blue-600 shrink-0"><Music size={20} /></div>
-                <div className="truncate">
-                  <h4 className="font-bold text-slate-800 truncate">{musica.titulo}</h4>
-                  <p className="text-xs text-slate-500 truncate">{musica.artista}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {musica.tom && <span className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl mr-2">{musica.tom}</span>}
-                {musica.bpm != null && <span className="bg-emerald-50 text-emerald-500 text-xs font-bold px-3 py-1.5 rounded-xl mr-2">{musica.bpm} BPM</span>}
-                {musica.link_cifra && <a href={musica.link_cifra} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-orange-500 transition p-1"><FileText size={20} /></a>}
-                {musica.link_youtube && <a href={musica.link_youtube} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-red-500 transition p-1"><PlaySquare size={20} /></a>}
-                
-                <button onClick={() => openEditModal(musica)} className="text-slate-300 hover:text-slate-500 transition p-1 ml-1">
-                  <Edit size={18} />
+        <div className="space-y-4">
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50">
+                  <th onClick={() => requestSort('titulo')} className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest cursor-pointer hover:bg-slate-100 transition-colors">
+                    <div className="flex items-center gap-2">Título <SortIcon column="titulo" /></div>
+                  </th>
+                  <th onClick={() => requestSort('artista')} className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest cursor-pointer hover:bg-slate-100 transition-colors">
+                    <div className="flex items-center gap-2">Artista <SortIcon column="artista" /></div>
+                  </th>
+                  <th onClick={() => requestSort('tom')} className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest cursor-pointer hover:bg-slate-100 transition-colors">
+                    <div className="flex items-center gap-2">Tom <SortIcon column="tom" /></div>
+                  </th>
+                  <th onClick={() => requestSort('bpm')} className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest cursor-pointer hover:bg-slate-100 transition-colors text-center">
+                    <div className="flex items-center justify-center gap-2">BPM <SortIcon column="bpm" /></div>
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Links</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {musicasPaginadas.map((musica) => (
+                  <tr key={musica.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-blue-50 text-blue-600 p-2 rounded-xl group-hover:bg-white transition-colors">
+                          <Music size={16} />
+                        </div>
+                        <span className="font-bold text-slate-700">{musica.titulo}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500 font-medium">{musica.artista || '-'}</td>
+                    <td className="px-6 py-4">
+                      {musica.tom ? (
+                        <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-3 py-1 rounded-lg">
+                          {musica.tom}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {musica.bpm ? (
+                        <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-3 py-1 rounded-lg">
+                          {musica.bpm}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        {musica.link_cifra && (
+                          <a href={musica.link_cifra} target="_blank" rel="noopener noreferrer" className="bg-slate-50 text-slate-400 hover:text-orange-500 p-2 rounded-xl transition-all">
+                            <FileText size={18} />
+                          </a>
+                        )}
+                        {musica.link_youtube && (
+                          <a href={musica.link_youtube} target="_blank" rel="noopener noreferrer" className="bg-slate-50 text-slate-400 hover:text-red-500 p-2 rounded-xl transition-all">
+                            <PlaySquare size={18} />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {isAdmin && (
+                          <>
+                            <button onClick={() => openEditModal(musica)} className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                              <Edit size={18} />
+                            </button>
+                            <button onClick={() => confirmarExclusao(musica.id)} className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                              <Trash2 size={18} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Paginador */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-2 bg-white rounded-2xl border border-slate-100 shadow-sm">
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                Página {currentPage} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft size={20} />
                 </button>
-                {/* Aqui substituímos a chamada antiga pela nova função confirmarExclusao */}
-                <button onClick={() => confirmarExclusao(musica.id)} className="text-slate-300 hover:text-red-500 transition p-1 ml-1">
-                  <Trash2 size={18} />
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronRight size={20} />
                 </button>
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
       {/* O Modal de Nova Música continua igual ao código anterior... */}
+
       {isModalOpen && (
          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           {/* ... resto do seu formulário modal de cadastro ... */}

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-export default function Dashboard({ session }) {
+export default function Dashboard({ session, perfil }) {
   const [minhasEscalas, setMinhasEscalas] = useState([]);
   const [aniversariantes, setAniversariantes] = useState([]);
   const [avisos, setAvisos] = useState([]);
@@ -23,7 +23,7 @@ export default function Dashboard({ session }) {
     if (session?.user) {
       fetchDados();
     }
-  }, [session]);
+  }, [session, perfil]);
 
   async function fetchDados() {
     try {
@@ -32,23 +32,10 @@ export default function Dashboard({ session }) {
       const mesAtual = hoje.getMonth() + 1;
       const userId = session.user.id;
 
-      // 1. BUSCA O NOME (LÓGICA BLINDADA CONTRA ERRO 406)
-      // Pedimos um array com limite de 1. Assim, se vier vazio ou vierem 5, não dá erro.
-      const { data: perfilDataArray, error: perfilError } = await supabase
-        .from('perfis')
-        .select('nome, is_admin')
-        .eq('id', userId)
-        .limit(1);
-
-      if (perfilError) {
-        console.error("Erro na consulta do perfil:", perfilError.message);
-        setNomeUsuario('Membro');
-      } else if (perfilDataArray && perfilDataArray.length > 0 && perfilDataArray[0].nome) {
-        // Pega o primeiro nome da string que veio do banco
-        setNomeUsuario(perfilDataArray[0].nome.split(' ')[0]);
+      // 1. DEFINE O NOME A PARTIR DO PERFIL PASSADO
+      if (perfil?.nome) {
+        setNomeUsuario(perfil.nome.split(' ')[0]);
       } else {
-        // Se a busca deu certo mas o array está vazio
-        console.warn(`ID ${userId} não encontrado na tabela 'perfis'.`);
         setNomeUsuario('Membro');
       }
 
@@ -85,8 +72,7 @@ export default function Dashboard({ session }) {
       const hojeISO = new Date().toISOString().split('T')[0];
       let queryAvisos = supabase.from('avisos').select('*').or(`data_expiracao.is.null,data_expiracao.gte.${hojeISO}`);
       // se o perfil não for admin, filtra avisos administrativos
-      const isAdmin = perfilDataArray && perfilDataArray.length > 0 && perfilDataArray[0].is_admin;
-      if (!isAdmin) queryAvisos = queryAvisos.not('titulo', 'like', 'ADMIN:%');
+      if (!perfil?.is_admin) queryAvisos = queryAvisos.not('titulo', 'like', 'ADMIN:%');
       const { data: avData } = await queryAvisos.order('created_at', { ascending: false });
       setAvisos(avData || []);
 

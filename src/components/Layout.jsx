@@ -1,37 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+//import { Users } from './path/to/Users'; 
 import { 
   Home, 
   CalendarDays, 
   Music, 
   Bell, 
-  User, 
+  User,
+  Users,
   LogOut,
   Menu,
   X
 } from 'lucide-react';
 
-export default function Layout({ children, session }) {
+export default function Layout({ children, session, perfil }) {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    if (session?.user) {
-      checkAdminStatus();
-    }
-  }, [session]);
-
-  async function checkAdminStatus() {
-    const { data } = await supabase
-      .from('perfis')
-      .select('is_admin')
-      .eq('id', session.user.id)
-      .maybeSingle();
-    
-    setIsAdmin(data?.is_admin || false);
-  }
+  const isAdmin = perfil?.is_admin || false;
 
   async function handleLogoff() {
     try {
@@ -41,14 +27,14 @@ export default function Layout({ children, session }) {
     }
   }
 
-  // DEFINIÇÃO DOS LINKS COM FILTRO DE ADMIN
+  // DEFINIÇÃO DOS LINKS
   const menuItems = [
-    { path: '/', label: 'Início', icon: Home, visible: true },
-    { path: '/escalas', label: 'Escalas', icon: CalendarDays, visible: true },
-    { path: '/repertorio', label: 'Repertório', icon: Music, visible: true },
-    { path: '/avisos', label: 'Avisos', icon: Bell, visible: true },
-    // O PERFIL SÓ É VISÍVEL SE FOR ADMIN
-    { path: '/perfil', label: 'Perfil', icon: User, visible: isAdmin },
+    { path: '/', label: 'Início', icon: Home },
+    { path: '/escalas', label: 'Escalas', icon: CalendarDays },
+    { path: '/repertorio', label: 'Repertório', icon: Music },
+    { path: '/avisos', label: 'Avisos', icon: Bell },
+    { path: '/equipes', label: 'Equipes', icon: Users, adminOnly: true },
+    { path: '/perfil', label: 'Perfil', icon: User },
   ];
 
   const closeMenu = () => setIsMenuOpen(false);
@@ -76,9 +62,24 @@ export default function Layout({ children, session }) {
         </div>
 
         <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
-          {menuItems.filter(item => item.visible).map((item) => {
+          {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
+            const isDisabled = item.adminOnly && !isAdmin;
             const Icon = item.icon;
+
+            if (isDisabled) {
+              return (
+                <div
+                  key={item.path}
+                  className="flex items-center gap-4 px-4 py-4 rounded-2xl font-bold text-slate-200 cursor-not-allowed"
+                  title="Acesso restrito a administradores"
+                >
+                  <Icon size={20} />
+                  {item.label}
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.path}

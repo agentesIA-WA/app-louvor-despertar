@@ -4,10 +4,9 @@ import { Users, ShieldCheck, UserCircle, Edit2, X, CheckCircle, AlertCircle, Sav
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-export default function Membros({ session }) {
+export default function Membros({ session, perfil }) {
   const [equipe, setEquipe] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [meuPerfil, setMeuPerfil] = useState(null);
   const [notificacao, setNotificacao] = useState(null);
   
   const [isModalNovoOpen, setIsModalNovoOpen] = useState(false);
@@ -19,13 +18,11 @@ export default function Membros({ session }) {
 
   useEffect(() => { 
     fetchDados(); 
-  }, [session]);
+  }, [session, perfil]);
 
   async function fetchDados() {
     setLoading(true);
     try {
-      const { data: perfil } = await supabase.from('perfis').select('*').eq('id', session.user.id).single();
-      setMeuPerfil(perfil);
       const { data: membros } = await supabase.from('perfis').select('*').order('nome');
       if (membros) setEquipe(membros);
     } catch (err) {
@@ -98,7 +95,7 @@ export default function Membros({ session }) {
           <h2 className="text-2xl font-bold text-slate-800">Equipe</h2>
           <p className="text-sm text-slate-500">Gestão de membros e acessos</p>
         </div>
-        {meuPerfil?.is_admin && (
+        {perfil?.is_admin && (
           <button onClick={() => setIsModalNovoOpen(true)} className="bg-blue-600 text-white p-3 rounded-2xl shadow-lg flex items-center gap-2 font-bold hover:bg-blue-700 transition">
             <UserPlus size={20} /> <span className="hidden md:inline">Novo Membro</span>
           </button>
@@ -119,7 +116,7 @@ export default function Membros({ session }) {
                 <p className="text-xs text-slate-500">{membro.funcao || 'Membro'}</p>
               </div>
             </div>
-            {meuPerfil?.is_admin && (
+            {perfil?.is_admin && (
               <button onClick={() => setMembroParaEditar(membro)} className="text-slate-400 hover:text-blue-600 p-2 transition">
                 <Edit2 size={20} />
               </button>

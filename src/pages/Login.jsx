@@ -57,11 +57,25 @@ export default function Login() {
       }
 
       try {
-        const { data, error } = await supabase.auth.signUp({ email, password: senha });
+        const { data, error } = await supabase.auth.signUp({ 
+          email, 
+          password: senha,
+          options: {
+            data: {
+              nome: nome,
+              funcao: funcao || '',
+              telefone: telefone || '',
+              aniversario_dia: aniversario_dia ? parseInt(aniversario_dia) : null,
+              aniversario_mes: aniversario_mes ? parseInt(aniversario_mes) : null,
+              whatsapp: whatsapp || '',
+              email_contato: email
+            }
+          }
+        });
         console.log('signUp response', { data, error });
 
         if (error) {
-          // Tratamento específico para 429 (rate limit)
+          // ... (mantém lógica de erro/cooldown)
           if (error.status === 429) {
             const cooldownMs = 60 * 1000; // 60s
             setCooldownUntil(Date.now() + cooldownMs);
@@ -70,78 +84,15 @@ export default function Login() {
             setErro(error.message || 'Erro ao criar conta. Tente novamente.');
           }
         } else {
-          // Insere perfil na tabela 'perfis' com os dados do formulário
-          try {
-            const user = data?.user;
-            if (user) {
-              const perfilPayload = {
-                id: user.id,
-                nome: nome || '',
-                funcao: funcao || '',
-                telefone: telefone || null,
-                is_admin: false,
-                aniversario_dia: aniversario_dia ? parseInt(aniversario_dia) : null,
-                aniversario_mes: aniversario_mes ? parseInt(aniversario_mes) : null,
-                whatsapp: whatsapp || null,
-                email_contato: email || null,
-                data_nascimento: null,
-                acesso_escalas: false,
-                acesso_repertorio: false,
-                acesso_avisos: false
-              };
+          // O perfil agora é criado automaticamente pelo TRIGGER no banco,
+          // usando os dados que passamos no metadata acima.
+          
+          setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
 
-              const perfilRes = await supabase.from('perfis').insert([perfilPayload]);
-              console.log('perfil insert result', perfilRes);
-              const perfilError = perfilRes.error;
-              if (perfilError) {
-                console.error('Erro criando perfil inicial:', perfilError);
-                // Tentativa de fallback: inserir um registro mínimo para não perder o cadastro
-                try {
-                  const fallbackPayload = {
-                    id: user.id,
-                    nome: nome || '',
-                    email_contato: email || null,
-                    is_admin: false,
-                    acesso_escalas: false,
-                    acesso_repertorio: false,
-                    acesso_avisos: false
-                  };
-                  const fallbackRes = await supabase.from('perfis').insert([fallbackPayload]);
-                  console.log('perfil fallback result', fallbackRes);
-                  if (fallbackRes.error) {
-                    console.error('Fallback também falhou:', fallbackRes.error);
-                    setErro('Erro criando perfil: ' + (perfilError.message || JSON.stringify(perfilError)) + '\nFallback falhou: ' + (fallbackRes.error.message || JSON.stringify(fallbackRes.error)));
-                  } else {
-                    // fallback funcionou — informar admin e continuar
-                    setMensagem('Conta criada com sucesso! Perfil salvo em modo fallback. Aguarde aprovação do administrador.');
-                  }
-                } catch (fbErr) {
-                  console.error('Erro no fallback de perfil:', fbErr);
-                  setErro('Erro criando perfil e fallback falhou: ' + (fbErr.message || JSON.stringify(fbErr)));
-                }
-              } else {
-                // perfil criado com sucesso
-                setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
-              }
-
-
-              // Cria um aviso administrativo para notificar administradores sobre novo cadastro
-              try {
-                const adminTitle = `ADMIN: Novo usuário cadastrado - ${email}`;
-                const adminMessage = `Um novo usuário se registrou com o e-mail ${email} (id: ${user.id}). Conceda acessos no painel de Perfis.`;
-                const { error: avisoError } = await supabase.from('avisos').insert([{ titulo: adminTitle, mensagem: adminMessage, autor_id: user.id }]);
-                if (avisoError) console.error('Erro criando aviso admin:', avisoError);
-              } catch (errAviso) {
-                console.error('Erro ao criar aviso de admin:', errAviso);
-              }
-            }
-          } catch (err) {
-            console.error('Erro ao criar perfil inicial:', err);
-            setErro('Erro ao criar perfil inicial: ' + (err.message || JSON.stringify(err)));
-          }
-
+          // O aviso de "novo usuário" pode ser disparado por um trigger no banco futuramente
+          // ou o admin simplesmente verá o usuário na lista de aprovação que criamos.
+          
           if (!erro) {
-            setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
             setIsLogin(true);
             setSenha('');
           }
