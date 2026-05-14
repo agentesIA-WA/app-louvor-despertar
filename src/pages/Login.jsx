@@ -234,10 +234,10 @@ export default function Login() {
             <div className="pt-4 border-t border-slate-50">
               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3">Líder ou Pastor?</p>
               <Link 
-                to="/cadastro-igreja"
+                to="/solicitar-cadastro"
                 className="text-blue-600 text-sm font-black hover:underline"
               >
-                Cadastre sua Igreja aqui →
+                Solicite o acesso para sua Igreja aqui →
               </Link>
             </div>
           )}

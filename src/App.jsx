@@ -14,6 +14,7 @@ import Equipes from './pages/Equipes';
 import Membros from './pages/Membros';
 import InstituicaoPage from './pages/InstituicaoPage';
 import CadastroInstituicao from './pages/CadastroInstituicao';
+import SolicitarCadastro from './pages/SolicitarCadastro';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -69,6 +70,7 @@ export default function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/solicitar-cadastro" element={<SolicitarCadastro />} />
           <Route path="/cadastro-igreja" element={<CadastroInstituicao />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
