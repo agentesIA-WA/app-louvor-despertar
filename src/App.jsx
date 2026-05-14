@@ -5,11 +5,15 @@ import { supabase } from './lib/supabase';
 import Layout from './components/Layout';
 import Login from "./pages/Login";
 import Dashboard from './pages/Dashboard';
+import Inicio from './pages/Inicio';
 import Perfil from './pages/Perfil';
 import Escalas from './pages/Escalas'; 
 import Repertorio from './pages/Repertorio';
 import Avisos from './pages/Avisos';
 import Equipes from './pages/Equipes';
+import Membros from './pages/Membros';
+import InstituicaoPage from './pages/InstituicaoPage';
+import CadastroInstituicao from './pages/CadastroInstituicao';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -61,7 +65,15 @@ export default function App() {
   }
 
   if (!session) {
-    return <Login />;
+    return (
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/cadastro-igreja" element={<CadastroInstituicao />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Router>
+    );
   }
 
 
@@ -71,11 +83,14 @@ export default function App() {
       <Layout session={session} perfil={perfil}>
         <Routes>
           <Route path="/" element={<Dashboard session={session} perfil={perfil} />} />
+          <Route path="/inicio" element={<Inicio session={session} perfil={perfil} />} />
           <Route path="/escalas" element={<Escalas session={session} perfil={perfil} />} />
           <Route path="/repertorio" element={<Repertorio session={session} perfil={perfil} />} />
           <Route path="/avisos" element={<Avisos session={session} perfil={perfil} />} />
           <Route path="/equipes" element={<Equipes session={session} perfil={perfil} />} />
-          
+          <Route path="/membros" element={<Membros session={session} perfil={perfil} />} />
+          <Route path="/instituicao" element={<InstituicaoPage />} />
+
           <Route path="/perfil" element={<Perfil session={session} perfilProp={perfil} />} />
           
           <Route path="*" element={<Navigate to="/" replace />} />

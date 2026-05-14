@@ -14,7 +14,10 @@
 - **Supabase**: Backend-as-a-Service (BaaS).
     - **PostgreSQL**: Banco de dados relacional.
     - **Supabase Auth**: Gestão de usuários e sessões.
-    - **Row Level Security (RLS)**: Segurança a nível de linha no banco de dados.
+    - **Row Level Security (RLS)**: Segurança a nível de linha no banco de dados para garantir o isolamento multi-tenant.
+
+## Multi-Tenancy (Isolamento por Instituição)
+O sistema foi projetado para suportar múltiplas instituições de forma totalmente isolada. Cada igreja ou ministério possui seu próprio ambiente de dados. O isolamento é garantido via banco de dados (RLS) através da coluna `instituicao_id` presente em todas as tabelas principais.
 
 ## Estrutura de Pastas
 ```text

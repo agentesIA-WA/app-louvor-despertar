@@ -2,57 +2,57 @@
 
 O banco de dados utiliza o PostgreSQL gerenciado pelo Supabase. Abaixo estão as principais tabelas identificadas:
 
+## Multi-Tenancy
+Todas as tabelas do sistema (exceto a própria `instituicoes`) possuem uma coluna `instituicao_id` que garante o isolamento dos dados. Nenhuma informação de uma instituição é acessível por membros de outra.
+
 ## Tabelas Principais
+
+### `instituicoes`
+Entidade raiz que define uma igreja ou ministério.
+- `id`: uuid (PK)
+- `nome`: text
+- `endereco_completo`: text
+- `telefone_contato`: text
+- `dirigente_principal`: text
 
 ### `perfis` (Profiles)
 Armazena informações detalhadas dos usuários.
 - `id`: uuid (PK, FK para auth.users)
+- `instituicao_id`: uuid (FK para instituicoes)
 - `nome`: text
 - `email_contato`: text
-- `funcao`: text
-- `telefone`: text
-- `whatsapp`: text
-- `aniversario_dia`: int
-- `aniversario_mes`: int
 - `is_admin`: boolean
 - `acesso_escalas`: boolean
 - `acesso_repertorio`: boolean
 - `acesso_avisos`: boolean
 
 ### `equipes` (Teams)
-Categorias de atuação no ministério.
 - `id`: uuid (PK)
-- `nome`: text (Unique)
+- `instituicao_id`: uuid (FK para instituicoes)
+- `nome`: text
 - `descricao`: text
-- `created_at`: timestamp
-
-### `perfil_equipes`
-Relacionamento Muitos-para-Muitos entre Membros e Equipes.
-- `id`: uuid (PK)
-- `perfil_id`: uuid (FK para perfis)
-- `equipe_id`: uuid (FK para equipes)
+- *Constraint: Única por (nome, instituicao_id)*
 
 ### `escalas` (Schedules)
-Gerenciamento de datas e serviços.
 - `id`: uuid (PK)
+- `instituicao_id`: uuid (FK para instituicoes)
 - `equipe_id`: uuid (FK para equipes)
 
 ### `avisos` (Announcements)
 - `id`: uuid (PK)
+- `instituicao_id`: uuid (FK para instituicoes)
 - `autor_id`: uuid (FK para perfis)
 - `titulo`: text
 - `conteudo`: text
-- `created_at`: timestamp
 
 ### `repertorio` (Repertoire)
 - `id`: uuid (PK)
+- `instituicao_id`: uuid (FK para instituicoes)
 - `titulo`: text
 - `artista`: text
-- `link_cifra`: text
-- `link_video`: text
 
 ## Relacionamentos
 - `perfis` tem relação de 1:1 com `auth.users`.
 - `perfis` e `equipes` se relacionam via `perfil_equipes` (N:N).
-- `escalas` pertencem a uma `equipe` (1:N).
-- `avisos` são criados por um `perfil` (1:N).
+- `escalas` pertencem a uma `equipe` (1:N) e a uma `instituicao`.
+- `avisos` são criados por um `perfil` e pertencem a uma `instituicao`.

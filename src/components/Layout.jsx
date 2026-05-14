@@ -9,6 +9,7 @@ import {
   Bell, 
   User,
   Users,
+  Building,
   LogOut,
   Menu,
   X
@@ -34,6 +35,8 @@ export default function Layout({ children, session, perfil }) {
     { path: '/repertorio', label: 'Repertório', icon: Music },
     { path: '/avisos', label: 'Avisos', icon: Bell },
     { path: '/equipes', label: 'Equipes', icon: Users, adminOnly: true },
+    { path: '/membros', label: 'Membros', icon: User, adminOnly: true },
+    { path: '/instituicao', label: 'Instituição', icon: Building, adminOnly: true },
     { path: '/perfil', label: 'Perfil', icon: User },
   ];
 

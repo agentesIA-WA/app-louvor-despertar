@@ -1,3 +1,14 @@
+-- 0. Estrutura para Multi-Tenant (Instituições)
+CREATE TABLE IF NOT EXISTS public.instituicoes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Adiciona as colunas de relacionamento (Execute isso com segurança caso a tabela já exista)
+ALTER TABLE public.perfis ADD COLUMN IF NOT EXISTS instituicao_id UUID REFERENCES public.instituicoes(id);
+ALTER TABLE public.avisos ADD COLUMN IF NOT EXISTS instituicao_id UUID REFERENCES public.instituicoes(id);
+
 -- 1. Função atualizada para extrair TODOS os campos do metadata
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
@@ -11,6 +22,7 @@ BEGIN
     whatsapp, 
     aniversario_dia, 
     aniversario_mes, 
+    instituicao_id,
     is_admin, 
     acesso_escalas, 
     acesso_repertorio, 
@@ -25,6 +37,7 @@ BEGIN
     COALESCE(new.raw_user_meta_data->>'whatsapp', ''),
     (new.raw_user_meta_data->>'aniversario_dia')::int,
     (new.raw_user_meta_data->>'aniversario_mes')::int,
+    (new.raw_user_meta_data->>'instituicao_id')::UUID,
     false, 
     false, 
     false, 

@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Music } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -13,12 +14,28 @@ export default function Login() {
   const [aniversario_dia, setAniversarioDia] = useState('');
   const [aniversario_mes, setAniversarioMes] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  
+  const [instituicoes, setInstituicoes] = useState([]);
+  const [instituicaoId, setInstituicaoId] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
   const [mensagem, setMensagem] = useState(null);
   const submittingRef = useRef(false);
   const [cooldownUntil, setCooldownUntil] = useState(0);
+
+  // Buscar a lista de instituições ao carregar o componente
+  useEffect(() => {
+    async function fetchInstituicoes() {
+      // Alterado para usar a função RPC segura, que retorna apenas ID e Nome.
+      const { data, error } = await supabase.rpc('get_instituicoes_publicas');
+      if (error) {
+        console.error('Erro ao buscar instituições:', error);
+      }
+      if (data) setInstituicoes(data);
+    }
+    fetchInstituicoes();
+  }, []);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -56,6 +73,13 @@ export default function Login() {
         return;
       }
 
+      // Valida se a instituição foi selecionada
+      if (!instituicaoId) {
+        setErro('Selecione uma instituição / igreja.');
+        setLoading(false);
+        return;
+      }
+
       try {
         const { data, error } = await supabase.auth.signUp({ 
           email, 
@@ -68,7 +92,8 @@ export default function Login() {
               aniversario_dia: aniversario_dia ? parseInt(aniversario_dia) : null,
               aniversario_mes: aniversario_mes ? parseInt(aniversario_mes) : null,
               whatsapp: whatsapp || '',
-              email_contato: email
+              email_contato: email,
+              instituicao_id: instituicaoId
             }
           }
         });
@@ -89,9 +114,6 @@ export default function Login() {
           
           setMensagem('Conta criada com sucesso! Aguarde a aprovação do administrador para obter acesso.');
 
-          // O aviso de "novo usuário" pode ser disparado por um trigger no banco futuramente
-          // ou o admin simplesmente verá o usuário na lista de aprovação que criamos.
-          
           if (!erro) {
             setIsLogin(true);
             setSenha('');
@@ -149,6 +171,20 @@ export default function Login() {
                 <input type="text" value={nome} onChange={e => setNome(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" placeholder="Seu nome" required />
               </div>
 
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Instituição / Igreja</label>
+            <select 
+              value={instituicaoId} 
+              onChange={e => setInstituicaoId(e.target.value)} 
+              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" required
+            >
+              <option value="">Selecione sua instituição...</option>
+              {instituicoes.map(inst => (
+                <option key={inst.id} value={inst.id}>{inst.nome}</option>
+              ))}
+            </select>
+          </div>
+
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Função (ex: Vocal, Violão)</label>
                 <input type="text" value={funcao} onChange={e => setFuncao(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" placeholder="Funções separadas por vírgula" />
@@ -186,13 +222,25 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-8 text-center">
+        <div className="mt-8 text-center space-y-4">
           <button 
             onClick={() => { setIsLogin(!isLogin); setErro(null); setMensagem(null); }}
-            className="text-slate-500 text-sm font-semibold hover:text-blue-600 transition"
+            className="text-slate-500 text-sm font-semibold hover:text-blue-600 transition block w-full"
           >
             {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Fazer Login'}
           </button>
+          
+          {isLogin && (
+            <div className="pt-4 border-t border-slate-50">
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3">Líder ou Pastor?</p>
+              <Link 
+                to="/cadastro-igreja"
+                className="text-blue-600 text-sm font-black hover:underline"
+              >
+                Cadastre sua Igreja aqui →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>
